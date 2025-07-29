@@ -1,0 +1,149 @@
+/* ===================================================================
+   Firebase Connector Plugin - Main Stylesheet
+   Version: 1.0.4
+   =================================================================== */
+
+/*
+ * --- SECTION 1: Issues List Grid ---
+*/
+
+.fc-issues-title {
+    font-size: 36px;
+    font-weight: 700;
+    margin-bottom: 40px;
+    color: #000;
+}
+
+.wpcap-grid-container {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-row-gap: 35px;
+    grid-column-gap: 30px;
+}
+.wpcap-post .post-grid-thumbnail img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+.wpcap-post .post-grid-text-wrap {
+    padding: 15px 5px 5px;
+    text-align: center;
+}
+.wpcap-post h3.title {
+    margin: 0;
+    font-size: 24px;
+    font-weight: bold;
+    line-height: 1.3;
+}
+.wpcap-post h3.title a {
+    text-decoration: none;
+    color: #000000;
+}
+
+
+/*
+ * --- SECTION 2: Single Issue Page ---
+*/
+
+/* Styles for the header section (image, title, meta) */
+.fc-single-issue__header {
+    margin-bottom: 2em;
+}
+
+/* 
+ * --- NEW FIXES START HERE --- 
+ * This section makes the content wider and adjusts columns.
+*/
+
+/*
+ * FIX #1: Widen the content blocks to fill their container.
+ * We use our .fc-single-issue class to make this rule stronger than the theme's.
+*/
+.fc-single-issue .entry-content > .wp-block-group {
+    max-width: none !important; /* This is the key fix for the width */
+}
+
+/* 
+ * FIX #2: Adjust the article column widths.
+ * We use !important to override the inline styles from the PHP.
+*/
+/* This makes the image column 40% */
+.fc-single-issue .wp-block-columns > .wp-block-column:first-child {
+    flex-basis: 40% !important;
+}
+/* This makes the text column 60% */
+.fc-single-issue .wp-block-columns > .wp-block-column:nth-child(2) {
+    flex-basis: 60% !important;
+}
+
+/* --- End of New Fixes --- */
+
+
+/* Original styles for the single issue page content */
+.featured-img-caption { 
+	font-size: 12px;
+	color: #666;
+	margin-top: -1em;
+	text-align: right;	
+}
+.vorspann { 
+	font-size: 19px;
+	font-weight: bold;
+	margin-bottom: 40px;
+}
+.teaser-caption { 
+	margin-top: -2.2em !important;
+	margin-left: 1em;
+	font-size: 12px;
+	color: #EEEEEE;
+}
+.news-teaser { 
+	margin-top: -5px !important;	
+	margin-bottom: 15px !important;	
+}
+@media screen and (min-width: 800px) {
+    .news-teaser-img {
+        height: 175px;
+        width: 100%;
+        object-fit: cover;
+    }
+}
+
+
+/*
+ * --- SECTION 3: Responsive Rules for Mobile & Tablet ---
+*/
+
+@media (max-width: 768px) {
+    .wpcap-grid-container {
+        grid-template-columns: repeat(2, 1fr);
+        grid-column-gap: 20px;
+    }
+}
+@media (max-width: 600px) {
+    .wpcap-grid-container {
+        grid-template-columns: 1fr;
+    }
+    /* Make single issue columns stack on mobile */
+    .fc-single-issue .wp-block-columns {
+        flex-direction: column;
+    }
+    .fc-single-issue .wp-block-columns > .wp-block-column {
+        flex-basis: 100% !important;
+        max-width: 100%;
+        padding: 0 !important;
+    }
+    .fc-single-issue .wp-block-columns > .wp-block-column:first-child {
+        margin-bottom: 20px;
+    }
+    .news-teaser-img {
+        height: auto;
+        min-height: 200px;
+    }
+}
+
+/*
+ * --- SECTION 4: Utility Styles ---
+*/
+
+.fc-error-message{color:#d8000c;background-color:#ffd2d2;border:1px solid #d8000c;padding:15px;border-radius:5px}
