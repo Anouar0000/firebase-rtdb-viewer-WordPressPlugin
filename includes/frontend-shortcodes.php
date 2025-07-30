@@ -9,14 +9,27 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Enqueues the frontend stylesheet for our shortcodes.
  */
+// in /includes/frontend-shortcodes.php
+
+/**
+ * Enqueues the frontend stylesheet for our plugin.
+ */
 function firebase_connector_enqueue_styles() {
     global $post;
-    if ( is_a( $post, 'WP_Post' ) && ( has_shortcode( $post->post_content, 'firebase_issues_list' ) || has_shortcode( $post->post_content, 'firebase_single_issue' ) ) ) {
+
+    // Condition 1: Load on any page that has the [firebase_issues_list] shortcode.
+    $load_on_list_page = is_a($post, 'WP_Post') && has_shortcode($post->post_content, 'firebase_issues_list');
+
+    // Condition 2: Load on any single post page that was created by our plugin.
+    $load_on_single_post = is_singular('post') && get_post_meta(get_the_ID(), '_firebase_issue_id', true);
+
+    // If either condition is true, load the stylesheet.
+    if ( $load_on_list_page || $load_on_single_post ) {
         wp_enqueue_style(
             'firebase-connector-styles',
             plugin_dir_url( __FILE__ ) . 'frontend-shortcodes.css', // Assumes CSS is in the same folder
-            array(),
-            '1.0.2' // Update version when you change CSS
+            [],
+            '1.2.4' // Increment version to bust the cache
         );
     }
 }

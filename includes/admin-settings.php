@@ -161,8 +161,8 @@ function firebase_connector_tools_page_html() {
             <button id="scan-firebase-issues" class="button button-primary">Scan for Issues</button>
             <div id="sync-tool-filters" style="display: none;">
                 <select id="status-filter">
-                    <option value="all">Show All</option>
-                    <option value="unsynced" selected>Show Unsynced (Missing & Unlinked)</option>
+                    <option value="all" selected>Show All</option>
+                    <option value="unsynced">Show Unsynced (Missing & Unlinked)</option>
                     <option value="synced">Show Synced (Managed & Protected)</option>
                     <option value="missing">Show Missing Only</option>
                     <option value="match_unlinked">Show Unlinked Matches Only</option>

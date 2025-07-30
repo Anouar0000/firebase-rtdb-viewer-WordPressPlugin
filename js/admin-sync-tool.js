@@ -130,48 +130,60 @@ jQuery(document).ready(function($) {
         renderPagination(totalItems, totalPages);
     }
     
-    function renderTableRows(data) {
-        const $tableBody = $('#firebase-sync-table-body');
-        const template = $('#sync-row-template').html();
-        $tableBody.empty();
-        if (data.length === 0) {
-            $tableBody.html('<tr><td colspan="4">No issues match your criteria.</td></tr>');
-            return;
-        }
-        data.forEach(function(item) {
-            let rowHtml = template.replace(/{{issueId}}/g, item.id).replace('{{headline}}', item.headline);
-            const $row = $(rowHtml);
-            let statusText = '';
-            let actionHtml = '';
+function renderTableRows(data) {
+    const $tableBody = $('#firebase-sync-table-body');
+    const template = $('#sync-row-template').html();
+    $tableBody.empty();
 
-            switch (item.status) {
-                case 'missing':
-                    statusText = 'Missing';
-                    actionHtml = '<button class="button button-small action-create" data-issue-id="' + item.id + '">Create Post</button>';
-                    break;
-                case 'synced_managed':
-                    statusText = 'Synced (Managed)';
-                    actionHtml = 'Up-to-date';
-                    $row.find('.row-checkbox').remove();
-                    break;
-                case 'synced_manual':
-                    statusText = 'Synced (Protected)';
-                    actionHtml = 'Protected';
-                    $row.find('.row-checkbox').remove();
-                    break;
-                case 'match_unlinked':
-                    statusText = 'Match Found (Unlinked)';
-                    actionHtml = '<button class="button button-primary button-small action-link" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Link Post</button>';
-                    $row.find('.row-checkbox').prop('checked', false); // Start unchecked
-                    break;
-            }
-
-            $row.find('.status-label').text(statusText);
-            $row.find('.actions-cell').html(actionHtml + '<span class="spinner row-spinner"></span>');
-            $row.addClass('status-' + item.status);
-            $tableBody.append($row);
-        });
+    if (data.length === 0) {
+        $tableBody.html('<tr><td colspan="4">No issues match your criteria.</td></tr>');
+        return;
     }
+
+    data.forEach(function(item) {
+        let statusText = '';
+        let actionHtml = '';
+        let checkboxHtml = '<th scope="row" class="check-column"><input type="checkbox" class="row-checkbox" data-issue-id="' + item.id + '"></th>';
+
+        // Determine the text and button based on the status
+        switch (item.status) {
+            case 'missing':
+                statusText = 'Missing';
+                actionHtml = '<button class="button button-small action-create" data-issue-id="' + item.id + '">Create Post</button>';
+                break;
+            case 'synced_managed':
+                statusText = 'Synced (Managed)';
+                actionHtml = 'Up-to-date';
+                checkboxHtml = '<th scope="row" class="check-column"></th>'; // No checkbox
+                break;
+            case 'synced_manual':
+                statusText = 'Synced (Protected)';
+                actionHtml = 'Protected';
+                checkboxHtml = '<th scope="row" class="check-column"></th>'; // No checkbox
+                break;
+            case 'match_unlinked':
+                statusText = 'Match Found (Unlinked)';
+                actionHtml = '<button class="button button-primary button-small action-link" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Link Post</button>';
+                break;
+        }
+
+        // ** THIS IS THE FIX **
+        // We replace all placeholders BEFORE creating the jQuery object.
+        let rowHtml = template
+            .replace(/{{issueId}}/g, item.id)
+            .replace('{{headline}}', item.headline)
+            .replace('{{status}}', statusText); // This was the missing part
+        
+        const $row = $(rowHtml);
+
+        // Now we can set the more complex parts that need HTML
+        $row.find('.actions-cell').html(actionHtml + '<span class="spinner row-spinner"></span>');
+        $row.find('.check-column').replaceWith(checkboxHtml);
+        $row.addClass('status-' + item.status);
+        
+        $tableBody.append($row);
+    });
+}
     
     function renderPagination(totalItems, totalPages) {
         const $pagination = $('#pagination-controls');
