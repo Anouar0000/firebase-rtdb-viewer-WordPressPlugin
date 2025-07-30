@@ -4,91 +4,43 @@ jQuery(document).ready(function($) {
     let currentPage = 1;
     const itemsPerPage = 20;
 
-    // --- EVENT LISTENERS ---
-
-    $('#scan-firebase-issues').on('click', function() {
-        const $button = $(this);
-        const $spinner = $button.siblings('.spinner');
-        $button.prop('disabled', true);
-        $spinner.addClass('is-active');
-        $('#firebase-sync-table-body').html('<tr><td colspan="4">Scanning... This may take a moment.</td></tr>');
-        $('.wp-list-table, #pagination-controls').show();
-        $.post(firebase_sync_data.ajax_url, {
-            action: 'firebase_scan_issues',
-            nonce: firebase_sync_data.nonce
-        }).done(function(response) {
-            if (response.success) {
-                allIssuesData = response.data;
-                currentPage = 1;
-                renderDisplay();
-                $('#sync-tool-filters, #sync-tool-actions, .tablenav.bottom').show();
-            } else {
-                $('#firebase-sync-table-body').html('<tr><td colspan="4">Error: ' + response.data + '</td></tr>');
-            }
-        }).fail(function() {
-            $('#firebase-sync-table-body').html('<tr><td colspan="4">A server error occurred. Please try again.</td></tr>');
-        }).always(function() {
-            $spinner.removeClass('is-active');
-            $button.prop('disabled', false);
-        });
-    });
-
-    $('#status-filter, #search-filter').on('change keyup', function() { currentPage = 1; renderDisplay(); });
-    $('#pagination-controls').on('click', 'a', function(e) { e.preventDefault(); const newPage = $(this).data('page'); if (newPage) { currentPage = parseInt(newPage); renderDisplay(); } });
-
-    $('#firebase-sync-table-body').on('click', '.action-create, .action-link', function() {
-        const $button = $(this);
-        const issueId = $button.data('issue-id');
-        const postId = $button.data('post-id') || null;
-        const ajaxAction = $button.hasClass('action-create') ? 'firebase_create_single_post' : 'firebase_link_single_post';
-        processRow($button.closest('tr'), issueId, ajaxAction, { post_id: postId });
-    });
-    
-    $('#create-selected').on('click', function() {
-        const $rowsToProcess = $('#firebase-sync-table-body input.row-checkbox:checked').closest('tr.status-missing');
-        if (!$rowsToProcess.length) { alert('No "Missing" items are selected. This action only creates new posts.'); return; }
-        processRowsSequentially($rowsToProcess);
-    });
-
-    $('#link-selected').on('click', function() {
-        const $rowsToProcess = $('#firebase-sync-table-body input.row-checkbox:checked').closest('tr.status-match_unlinked');
-        if (!$rowsToProcess.length) { alert('No "Match Found" items are selected. This action only links existing posts.'); return; }
-        processRowsSequentially($rowsToProcess);
-    });
-
-    $('.wp-list-table').on('click', '#cb-select-all-1', function() {
-        const isChecked = $(this).is(':checked');
-        $('#firebase-sync-table-body .row-checkbox').prop('checked', isChecked);
-    });
-
 
     // --- LOGIC & RENDER FUNCTIONS ---
-    function processRow($row, issueId, ajaxAction, extraData = {}) {
+    function processRow($row, issueId, postId, ajaxAction) {
         const $button = $row.find('.button');
         const $spinner = $row.find('.row-spinner');
         $button.prop('disabled', true);
         $spinner.addClass('is-active');
-        const postData = $.extend({ action: ajaxAction, nonce: firebase_sync_data.nonce, issue_id: issueId }, extraData);
+
+        const postData = {
+            action: ajaxAction,
+            nonce: firebase_sync_data.nonce,
+            issue_id: issueId,
+            post_id: postId
+        };
+
         const promise = $.post(firebase_sync_data.ajax_url, postData).done(function(response) {
             if (response.success) {
                 const item = allIssuesData.find(d => d.id === issueId);
-                if (ajaxAction === 'firebase_create_single_post') {
-                    if (item) item.status = 'synced_managed';
-                    $row.find('.status-cell').html('<span class="status-label status-synced-managed">Synced (Managed)</span>');
-                } else {
-                    if (item) item.status = 'synced_manual';
-                    $row.find('.status-cell').html('<span class="status-label status-synced-manual">Synced (Protected)</span>');
+                if (item) {
+                    // Just update the status in our master data array
+                    if (ajaxAction === 'firebase_create_single_post') { item.status = 'synced_managed'; }
+                    if (ajaxAction === 'firebase_link_single_post') { item.status = 'synced_manual'; }
+                    if (ajaxAction === 'firebase_unlink_single_post') { item.status = 'match_unlinked'; }
+                    
+                    // Let the single row renderer handle ALL visual updates
+                    renderSingleRow($row, item);
                 }
-                $row.find('.actions-cell').html('Done!');
-                $row.addClass('processed-success');
             } else {
                 $row.find('.actions-cell').html('Error!');
-                $button.prop('disabled', false);
             }
         }).fail(function() {
              $row.find('.actions-cell').html('Server Error!');
-             $button.prop('disabled', false);
-        }).always(function() { $spinner.removeClass('is-active'); });
+        }).always(function() {
+             // The spinner is now handled inside renderSingleRow, but we keep this as a fallback
+            if (!$spinner.hasClass('is-active')) return;
+            $spinner.removeClass('is-active');
+        });
         $row.data('ajaxPromise', promise);
     }
     
@@ -130,36 +82,50 @@ jQuery(document).ready(function($) {
         renderPagination(totalItems, totalPages);
     }
     
-function renderTableRows(data) {
-    const $tableBody = $('#firebase-sync-table-body');
-    const template = $('#sync-row-template').html();
-    $tableBody.empty();
+    function renderTableRows(data) {
+        const $tableBody = $('#firebase-sync-table-body');
+        const template = $('#sync-row-template').html();
+        $tableBody.empty();
 
-    if (data.length === 0) {
-        $tableBody.html('<tr><td colspan="4">No issues match your criteria.</td></tr>');
-        return;
+        if (data.length === 0) {
+            $tableBody.html('<tr><td colspan="4">No issues match your criteria.</td></tr>');
+            return;
+        }
+
+        data.forEach(function(item) {
+            // We only create the basic shell here.
+            let rowHtml = template
+                .replace(/{{issueId}}/g, item.id)
+                .replace('{{headline}}', item.headline)
+                .replace('{{status}}', ''); // Start with an empty status
+            
+            const $row = $(rowHtml);
+            $tableBody.append($row);
+            
+            // The single row renderer does all the detailed work
+            renderSingleRow($row, item);
+        });
     }
 
-    data.forEach(function(item) {
+            function renderSingleRow($row, item) {
         let statusText = '';
         let actionHtml = '';
         let checkboxHtml = '<th scope="row" class="check-column"><input type="checkbox" class="row-checkbox" data-issue-id="' + item.id + '"></th>';
 
-        // Determine the text and button based on the status
         switch (item.status) {
             case 'missing':
                 statusText = 'Missing';
                 actionHtml = '<button class="button button-small action-create" data-issue-id="' + item.id + '">Create Post</button>';
                 break;
             case 'synced_managed':
-                statusText = 'Synced (Managed)';
-                actionHtml = 'Up-to-date';
-                checkboxHtml = '<th scope="row" class="check-column"></th>'; // No checkbox
+                statusText = 'Synced (Up-to-date)';
+                actionHtml = '<button class="button button-small action-unlink" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Unlink</button>';
+                checkboxHtml = '<th scope="row" class="check-column"></th>';
                 break;
             case 'synced_manual':
                 statusText = 'Synced (Protected)';
-                actionHtml = 'Protected';
-                checkboxHtml = '<th scope="row" class="check-column"></th>'; // No checkbox
+                actionHtml = '<button class="button button-small action-unlink" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Unlink</button>';
+                checkboxHtml = '<th scope="row" class="check-column"></th>';
                 break;
             case 'match_unlinked':
                 statusText = 'Match Found (Unlinked)';
@@ -167,23 +133,11 @@ function renderTableRows(data) {
                 break;
         }
 
-        // ** THIS IS THE FIX **
-        // We replace all placeholders BEFORE creating the jQuery object.
-        let rowHtml = template
-            .replace(/{{issueId}}/g, item.id)
-            .replace('{{headline}}', item.headline)
-            .replace('{{status}}', statusText); // This was the missing part
-        
-        const $row = $(rowHtml);
-
-        // Now we can set the more complex parts that need HTML
+        $row.find('.status-cell .status-label').text(statusText);
         $row.find('.actions-cell').html(actionHtml + '<span class="spinner row-spinner"></span>');
         $row.find('.check-column').replaceWith(checkboxHtml);
-        $row.addClass('status-' + item.status);
-        
-        $tableBody.append($row);
-    });
-}
+        $row.attr('class', 'status-' + item.status); // Reset/set the class for the whole row
+    }
     
     function renderPagination(totalItems, totalPages) {
         const $pagination = $('#pagination-controls');
@@ -202,4 +156,69 @@ function renderTableRows(data) {
         paginationHtml += `</span>`;
         $pagination.html(paginationHtml);
     }
+
+
+
+        // --- EVENT LISTENERS ---
+
+    $('#scan-firebase-issues').on('click', function() {
+        const $button = $(this);
+        const $spinner = $button.siblings('.spinner');
+        $button.prop('disabled', true);
+        $spinner.addClass('is-active');
+        $('#firebase-sync-table-body').html('<tr><td colspan="4">Scanning... This may take a moment.</td></tr>');
+        $('.wp-list-table, #pagination-controls').show();
+        $.post(firebase_sync_data.ajax_url, {
+            action: 'firebase_scan_issues',
+            nonce: firebase_sync_data.nonce
+        }).done(function(response) {
+            if (response.success) {
+                allIssuesData = response.data;
+                currentPage = 1;
+                renderDisplay();
+                $('#sync-tool-filters, #sync-tool-actions, .tablenav.bottom').show();
+            } else {
+                $('#firebase-sync-table-body').html('<tr><td colspan="4">Error: ' + response.data + '</td></tr>');
+            }
+        }).fail(function() {
+            $('#firebase-sync-table-body').html('<tr><td colspan="4">A server error occurred. Please try again.</td></tr>');
+        }).always(function() {
+            $spinner.removeClass('is-active');
+            $button.prop('disabled', false);
+        });
+    });
+
+    $('#status-filter, #search-filter').on('change keyup', function() { currentPage = 1; renderDisplay(); });
+    $('#pagination-controls').on('click', 'a', function(e) { e.preventDefault(); const newPage = $(this).data('page'); if (newPage) { currentPage = parseInt(newPage); renderDisplay(); } });
+
+    $('#firebase-sync-table-body').on('click', '.action-create, .action-link, .action-unlink', function() {
+        const $button = $(this);
+        const $row = $button.closest('tr');
+        const issueId = $button.data('issue-id');
+        const postId = $button.data('post-id') || null;
+        let ajaxAction = '';
+        
+        if ($button.hasClass('action-create')) { ajaxAction = 'firebase_create_single_post'; }
+        if ($button.hasClass('action-link')) { ajaxAction = 'firebase_link_single_post'; }
+        if ($button.hasClass('action-unlink')) { ajaxAction = 'firebase_unlink_single_post'; }
+        
+        processRow($row, issueId, postId, ajaxAction);
+    });
+    
+    $('#create-selected').on('click', function() {
+        const $rowsToProcess = $('#firebase-sync-table-body input.row-checkbox:checked').closest('tr.status-missing');
+        if (!$rowsToProcess.length) { alert('No "Missing" items are selected. This action only creates new posts.'); return; }
+        processRowsSequentially($rowsToProcess);
+    });
+
+    $('#link-selected').on('click', function() {
+        const $rowsToProcess = $('#firebase-sync-table-body input.row-checkbox:checked').closest('tr.status-match_unlinked');
+        if (!$rowsToProcess.length) { alert('No "Match Found" items are selected. This action only links existing posts.'); return; }
+        processRowsSequentially($rowsToProcess);
+    });
+
+    $('.wp-list-table').on('click', '#cb-select-all-1', function() {
+        const isChecked = $(this).is(':checked');
+        $('#firebase-sync-table-body .row-checkbox').prop('checked', isChecked);
+    });
 });

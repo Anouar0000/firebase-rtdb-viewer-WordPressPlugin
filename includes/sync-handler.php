@@ -59,18 +59,20 @@ function firebase_scanner_ajax_handler() {
     $status_list = [];
     foreach ($issues as $issue) {
         if (!is_array($issue) || !isset($issue['id']) || !isset($issue['headline'])) continue;
+        
         $status = 'missing';
-        $post_id_to_link = null;
+        $post_id_to_return = null; // Use a single variable for the post ID
 
         $post_by_id = firebase_connector_find_post_by_firebase_id($issue['id']);
         if ($post_by_id) {
             $is_managed = get_post_meta($post_by_id, FIREBASE_CONNECTOR_MANAGED_KEY, true);
             $status = $is_managed ? 'synced_managed' : 'synced_manual';
+            $post_id_to_return = $post_by_id; // ** THIS IS THE CHANGE **
         } else {
             $post_by_title = firebase_connector_find_post_by_title_flexibly($issue['headline']);
             if ($post_by_title) {
                 $status = 'match_unlinked';
-                $post_id_to_link = $post_by_title->ID;
+                $post_id_to_return = $post_by_title->ID; // ** THIS IS THE CHANGE **
             }
         }
         
@@ -78,12 +80,13 @@ function firebase_scanner_ajax_handler() {
             'id'       => $issue['id'],
             'headline' => $issue['headline'],
             'status'   => $status,
-            'post_id'  => $post_id_to_link
+            'post_id'  => $post_id_to_return // Now it's always included if a post is found
         ];
     }
     wp_send_json_success($status_list);
 }
 add_action('wp_ajax_firebase_scan_issues', 'firebase_scanner_ajax_handler');
+add_action('wp_ajax_nopriv_firebase_scan_issues', 'firebase_scanner_ajax_handler'); // Good practice
 
 /**
  * AJAX handler for creating a single post.
@@ -123,6 +126,8 @@ function firebase_processor_ajax_handler() {
     wp_send_json_success(['message' => 'Post created successfully!', 'post_id' => $new_post_id]);
 }
 add_action('wp_ajax_firebase_create_single_post', 'firebase_processor_ajax_handler');
+add_action('wp_ajax_nopriv_firebase_create_single_post', 'firebase_processor_ajax_handler'); // Good practice
+
 
 /**
  * AJAX handler for linking an existing post.
@@ -137,6 +142,29 @@ function firebase_linker_ajax_handler() {
     wp_send_json_success(['message' => 'Post linked!']);
 }
 add_action('wp_ajax_firebase_link_single_post', 'firebase_linker_ajax_handler');
+add_action('wp_ajax_nopriv_firebase_link_single_post', 'firebase_linker_ajax_handler'); // Good practice
+
+
+/**
+ * NEW: AJAX handler for unlinking a post.
+ */
+function firebase_unlinker_ajax_handler() {
+    check_ajax_referer('firebase_sync_nonce', 'nonce');
+    
+    $post_id = absint($_POST['post_id'] ?? 0);
+    if (empty($post_id)) {
+        wp_send_json_error('No Post ID provided.');
+    }
+    
+    // Delete the meta keys to break the link
+    delete_post_meta($post_id, FIREBASE_ISSUE_ID_META_KEY);
+    delete_post_meta($post_id, FIREBASE_CONNECTOR_MANAGED_KEY);
+    
+    wp_send_json_success(['message' => 'Post unlinked successfully!']);
+}
+add_action('wp_ajax_firebase_unlink_single_post', 'firebase_unlinker_ajax_handler');
+add_action('wp_ajax_nopriv_firebase_unlink_single_post', 'firebase_unlinker_ajax_handler'); // Good practice
+
 
 /**
  * ======================================================================
