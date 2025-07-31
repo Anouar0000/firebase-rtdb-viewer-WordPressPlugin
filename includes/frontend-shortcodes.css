@@ -75,10 +75,20 @@
     gap: 25px;
 }
 .single-post .entry-content .firebase-post-content-wrapper .wp-block-columns.is-layout-flex > .wp-block-column:first-child {
-    flex-basis: 28% !important;
+    flex-basis: 35% !important;
 }
 .single-post .entry-content .firebase-post-content-wrapper .wp-block-columns.is-layout-flex > .wp-block-column:nth-child(2) {
-    flex-basis: 72% !important;
+    flex-basis: 65% !important;
+}
+
+.single-post .entry-content .firebase-post-content-wrapper .wp-block-columns.is-layout-flex {
+    /* Remove any existing horizontal padding */
+    padding-left: 0 !important;
+    /* Add the specific padding you want */
+    padding-right: 20px !important;
+}
+.single-post .entry-content .firebase-post-content-wrapper .wp-block-group__inner-container{
+    padding-left: 0 !important;
 }
 
 

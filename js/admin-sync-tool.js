@@ -23,26 +23,46 @@ jQuery(document).ready(function($) {
             if (response.success) {
                 const item = allIssuesData.find(d => d.id === issueId);
                 if (item) {
-                    // Just update the status in our master data array
-                    if (ajaxAction === 'firebase_create_single_post') { item.status = 'synced_managed'; }
-                    if (ajaxAction === 'firebase_link_single_post') { item.status = 'synced_manual'; }
-                    if (ajaxAction === 'firebase_unlink_single_post') { item.status = 'match_unlinked'; }
+                    // --- THE FIX IS HERE ---
+                    // We determine the NEW status based on which action succeeded.
                     
-                    // Let the single row renderer handle ALL visual updates
+                    if (ajaxAction === 'firebase_create_single_post') {
+                        // After creating, the status is ALWAYS 'draft_managed'
+                        item.status = 'draft_managed';
+                        // We also need to get the new post_id back from the server
+                        item.post_id = response.data.post_id; 
+                    }
+                    if (ajaxAction === 'firebase_link_single_post') {
+                        // After linking, the status becomes 'synced_manual'
+                        item.status = 'synced_manual';
+                    }
+                    if (ajaxAction === 'firebase_unlink_single_post') {
+                        // After unlinking, the status becomes 'match_unlinked'
+                        item.status = 'match_unlinked';
+                    }
+                    if (ajaxAction === 'firebase_publish_single_post') {
+                        // After publishing, the status becomes 'synced_managed'
+                        item.status = 'synced_managed';
+                    }
+                    
+                    // Now, we re-render the row with the correct, updated item data.
                     renderSingleRow($row, item);
                 }
             } else {
                 $row.find('.actions-cell').html('Error!');
+                $button.prop('disabled', false); // Re-enable button on failure
             }
         }).fail(function() {
              $row.find('.actions-cell').html('Server Error!');
+             $button.prop('disabled', false); // Re-enable button on failure
         }).always(function() {
-             // The spinner is now handled inside renderSingleRow, but we keep this as a fallback
-            if (!$spinner.hasClass('is-active')) return;
+            // Spinner is now handled inside renderSingleRow, but this is a good fallback.
             $spinner.removeClass('is-active');
         });
+
         $row.data('ajaxPromise', promise);
     }
+    
     
     function processRowsSequentially($rows) {
         if (!$rows.length) return;
@@ -107,7 +127,7 @@ jQuery(document).ready(function($) {
         });
     }
 
-            function renderSingleRow($row, item) {
+    function renderSingleRow($row, item) {
         let statusText = '';
         let actionHtml = '';
         let checkboxHtml = '<th scope="row" class="check-column"><input type="checkbox" class="row-checkbox" data-issue-id="' + item.id + '"></th>';
@@ -116,6 +136,11 @@ jQuery(document).ready(function($) {
             case 'missing':
                 statusText = 'Missing';
                 actionHtml = '<button class="button button-small action-create" data-issue-id="' + item.id + '">Create Post</button>';
+                break;
+            // ** NEW STATUS AND BUTTON **
+            case 'draft_managed':
+                statusText = 'Draft (Managed)';
+                actionHtml = '<button class="button button-primary button-small action-publish" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Publish</button>';
                 break;
             case 'synced_managed':
                 statusText = 'Synced (Up-to-date)';
@@ -136,7 +161,7 @@ jQuery(document).ready(function($) {
         $row.find('.status-cell .status-label').text(statusText);
         $row.find('.actions-cell').html(actionHtml + '<span class="spinner row-spinner"></span>');
         $row.find('.check-column').replaceWith(checkboxHtml);
-        $row.attr('class', 'status-' + item.status); // Reset/set the class for the whole row
+        $row.attr('class', 'status-' + item.status);
     }
     
     function renderPagination(totalItems, totalPages) {
@@ -191,7 +216,7 @@ jQuery(document).ready(function($) {
     $('#status-filter, #search-filter').on('change keyup', function() { currentPage = 1; renderDisplay(); });
     $('#pagination-controls').on('click', 'a', function(e) { e.preventDefault(); const newPage = $(this).data('page'); if (newPage) { currentPage = parseInt(newPage); renderDisplay(); } });
 
-    $('#firebase-sync-table-body').on('click', '.action-create, .action-link, .action-unlink', function() {
+    $('#firebase-sync-table-body').on('click', '.action-create, .action-link, .action-unlink, .action-publish', function() {
         const $button = $(this);
         const $row = $button.closest('tr');
         const issueId = $button.data('issue-id');
@@ -201,9 +226,11 @@ jQuery(document).ready(function($) {
         if ($button.hasClass('action-create')) { ajaxAction = 'firebase_create_single_post'; }
         if ($button.hasClass('action-link')) { ajaxAction = 'firebase_link_single_post'; }
         if ($button.hasClass('action-unlink')) { ajaxAction = 'firebase_unlink_single_post'; }
+        if ($button.hasClass('action-publish')) { ajaxAction = 'firebase_publish_single_post'; }
         
         processRow($row, issueId, postId, ajaxAction);
     });
+
     
     $('#create-selected').on('click', function() {
         const $rowsToProcess = $('#firebase-sync-table-body input.row-checkbox:checked').closest('tr.status-missing');
@@ -221,4 +248,15 @@ jQuery(document).ready(function($) {
         const isChecked = $(this).is(':checked');
         $('#firebase-sync-table-body .row-checkbox').prop('checked', isChecked);
     });
+    $('#publish-selected').on('click', function() {
+    // Find only the *draft* items that are checked
+    const $rowsToProcess = $('#firebase-sync-table-body input.row-checkbox:checked')
+        .closest('tr.status-draft_managed');
+    
+    if (!$rowsToProcess.length) {
+        alert('No "Draft" items are selected. This action only publishes drafts.');
+        return;
+    }
+    processRowsSequentially($rowsToProcess);
+});
 });

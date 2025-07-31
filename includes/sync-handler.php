@@ -53,7 +53,8 @@ function firebase_scanner_ajax_handler() {
     check_ajax_referer('firebase_sync_nonce', 'nonce');
     $options = get_option('firebase_connector_settings');
     $admin_limit = $options['admin_limit'] ?? 200;
-    $issues = firebase_issues_fetcher_get_issues($admin_limit, 'en');
+    $lang = $options['lang'] ?? 'en';
+    $issues = firebase_issues_fetcher_get_issues($admin_limit, $lang);
     if (is_wp_error($issues)) { wp_send_json_error('Failed to fetch issues from Firebase.'); }
 
     $status_list = [];
@@ -65,9 +66,14 @@ function firebase_scanner_ajax_handler() {
 
         $post_by_id = firebase_connector_find_post_by_firebase_id($issue['id']);
         if ($post_by_id) {
-            $is_managed = get_post_meta($post_by_id, FIREBASE_CONNECTOR_MANAGED_KEY, true);
-            $status = $is_managed ? 'synced_managed' : 'synced_manual';
-            $post_id_to_return = $post_by_id; // ** THIS IS THE CHANGE **
+            $post_status = get_post_status($post_by_id);
+            if ($post_status === 'draft') {
+                $status = 'draft_managed'; // New status for drafts
+            } else {
+                $is_managed = get_post_meta($post_by_id, FIREBASE_CONNECTOR_MANAGED_KEY, true);
+                $status = $is_managed ? 'synced_managed' : 'synced_manual';
+            }
+            $post_id_to_return = $post_by_id;
         } else {
             $post_by_title = firebase_connector_find_post_by_title_flexibly($issue['headline']);
             if ($post_by_title) {
@@ -99,9 +105,6 @@ function firebase_processor_ajax_handler() {
         wp_send_json_error('No Issue ID provided.');
     }
 
-    $options = get_option('firebase_connector_settings');
-    $create_as_draft = !isset($options['create_as_draft']) || $options['create_as_draft'] == 1;
-
     $issue_details = firebase_issues_fetcher_get_single_issue_details($issue_id);
     if (is_wp_error($issue_details)) {
         wp_send_json_error('Could not fetch issue details.');
@@ -110,8 +113,10 @@ function firebase_processor_ajax_handler() {
     $post_data = [
         'post_title'   => wp_strip_all_tags($issue_details['headline']),
         'post_content' => firebase_connector_generate_post_content($issue_details, $issue_id),
-        'post_status'  => $create_as_draft ? 'draft' : 'publish',
+        'post_status'  => 'draft',
         'post_type'    => 'post',
+        'post_author'   => 29, // Replace 7 with your actual "Squirrel News" User ID
+        'post_category' => array( 4 ) // Replace 5 with your actual "News" Category ID
     ];
     $new_post_id = wp_insert_post($post_data);
 
@@ -165,6 +170,24 @@ function firebase_unlinker_ajax_handler() {
 add_action('wp_ajax_firebase_unlink_single_post', 'firebase_unlinker_ajax_handler');
 add_action('wp_ajax_nopriv_firebase_unlink_single_post', 'firebase_unlinker_ajax_handler'); // Good practice
 
+/**
+ * NEW: AJAX handler for publishing a single post.
+ */
+function firebase_publish_post_ajax_handler() {
+    check_ajax_referer('firebase_sync_nonce', 'nonce');
+    
+    $post_id = absint($_POST['post_id'] ?? 0);
+    if (empty($post_id) || !current_user_can('publish_post', $post_id)) {
+        wp_send_json_error('Invalid Post ID or insufficient permissions.');
+    }
+    
+    // The core of the function: update the post status to 'publish'
+    $update_args = ['ID' => $post_id, 'post_status' => 'publish'];
+    wp_update_post($update_args);
+    
+    wp_send_json_success(['message' => 'Post published successfully!']);
+}
+add_action('wp_ajax_firebase_publish_single_post', 'firebase_publish_post_ajax_handler');
 
 /**
  * ======================================================================
@@ -178,10 +201,10 @@ add_action('wp_ajax_nopriv_firebase_unlink_single_post', 'firebase_unlinker_ajax
 function firebase_connector_sync_issues_to_posts() {
     error_log('Firebase Sync: Automatic task started.');
     $options = get_option('firebase_connector_settings');
-    $create_as_draft = !isset($options['create_as_draft']) || $options['create_as_draft'] == 1;
     $sync_limit = $options['ongoing_sync_limit'] ?? 50;
+    $lang = $options['lang'] ?? 'en';
 
-    $issues = firebase_issues_fetcher_get_issues($sync_limit, 'en'); 
+    $issues = firebase_issues_fetcher_get_issues($sync_limit, $lang); 
     if (is_wp_error($issues) || empty($issues)) {
         error_log('Firebase Sync: No issues found or API error.');
         return;
@@ -201,7 +224,12 @@ function firebase_connector_sync_issues_to_posts() {
                 // UPDATE if managed
                 $issue_details = firebase_issues_fetcher_get_single_issue_details($firebase_id);
                 if (is_wp_error($issue_details)) continue;
-                $post_data = [ 'ID' => $existing_post_id, 'post_title' => wp_strip_all_tags($issue_details['headline']), 'post_content' => firebase_connector_generate_post_content($issue_details, $firebase_id) ];
+                $post_data = 
+                [ 
+                    'ID' => $existing_post_id,
+                    'post_title' => wp_strip_all_tags($issue_details['headline']), 
+                    'post_content' => firebase_connector_generate_post_content($issue_details, $firebase_id) 
+                ];
                 wp_update_post($post_data);
                 firebase_connector_set_featured_image($existing_post_id, $issue_details['image'], $issue_details['headline']);
                 $updated++;
@@ -212,7 +240,15 @@ function firebase_connector_sync_issues_to_posts() {
             // CREATE if missing
             $issue_details = firebase_issues_fetcher_get_single_issue_details($firebase_id);
             if (is_wp_error($issue_details)) continue;
-            $post_data = [ 'post_title' => wp_strip_all_tags($issue_details['headline']), 'post_content' => firebase_connector_generate_post_content($issue_details, $firebase_id), 'post_status'  => $create_as_draft ? 'draft' : 'publish', 'post_type' => 'post' ];
+            $post_data = 
+            [ 
+                'post_title' => wp_strip_all_tags($issue_details['headline']), 
+                'post_content' => firebase_connector_generate_post_content($issue_details, $firebase_id), 
+                'post_status'  => 'publish', 
+                'post_type' => 'post',
+                'post_author'   => 29,
+                'post_category' => array( 4 )
+            ];
             $new_post_id = wp_insert_post($post_data);
             if ($new_post_id && !is_wp_error($new_post_id)) {
                 update_post_meta($new_post_id, FIREBASE_ISSUE_ID_META_KEY, $firebase_id);
@@ -233,14 +269,24 @@ function firebase_connector_sync_issues_to_posts() {
  * ======================================================================
  */
 function firebase_connector_generate_post_content( $issue, $issue_id ) {
-    $main_image_credit = isset( $issue['imageCredit'] ) ? esc_html( $issue['imageCredit'] ) : '';
-    $teaser = isset( $issue['teaser'] ) ? wp_kses_post( $issue['teaser'] ) : '';
+    // Get all the data from Firebase
+    $main_image_url = isset($issue['image']) ? esc_url($issue['image']) : '';
+    $headline = isset($issue['headline']) ? esc_attr($issue['headline']) : '';
+    $main_image_credit = isset($issue['imageCredit']) ? esc_html($issue['imageCredit']) : '';
+    $teaser = isset($issue['teaser']) ? wp_kses_post($issue['teaser']) : '';
     
     ob_start();
     ?>
     
-    <!-- NEW WRAPPER DIV with a unique class -->
+    <!-- Use a simple wrapper div for easy styling -->
     <div class="firebase-post-content-wrapper">
+
+        <?php // GUARANTEED FIX: Manually display the main image here. ?>
+        <?php if ( ! empty( $main_image_url ) ) : ?>
+            <figure class="wp-block-image size-full firebase-main-image">
+                <img src="<?php echo $main_image_url; ?>" alt="<?php echo $headline; ?>" class="wp-post-image"/>
+            </figure>
+        <?php endif; ?>
 
         <?php if ( ! empty( $main_image_credit ) ) : ?><p class="featured-img-caption">Photo: <?php echo $main_image_credit; ?></p><?php endif; ?>
         <?php if ( ! empty( $teaser ) ) : ?><p class="vorspann"><?php echo $teaser; ?></p><?php endif; ?>
@@ -249,18 +295,17 @@ function firebase_connector_generate_post_content( $issue, $issue_id ) {
             $articles = $issue['articles'];
             usort($articles, function($a, $b) { return ($a['position'] ?? 999) <=> ($b['position'] ?? 999); });
             foreach ( $articles as $article ) :
-                // ... all the variable definitions are the same ...
                 $article_url = isset( $article['url'] ) ? esc_url( $article['url'] ) : '#';
                 $article_image_url = isset( $article['imageUrl'] ) ? esc_url( $article['imageUrl'] ) : '';
                 $article_title = isset( $article['title'] ) ? esc_html( $article['title'] ) : 'No Title';
-                $article_teaser = isset( $article['teaser'] ) ? esc_html( $article['teaser'] ) : '';
+                $article_teaser = isset( $article['teaser'] ) ? wp_kses_post( $article['teaser'] ) : '';
                 $article_source = isset( $article['source'] ) ? esc_html( $article['source'] ) : 'Unknown Source';
                 $article_credit = isset( $article['credit'] ) ? esc_html( $article['credit'] ) : '';
         ?>
         <div class="wp-block-group" style="margin-bottom:30px;"><div class="wp-block-group__inner-container"><div class="wp-block-columns is-layout-flex"><div class="wp-block-column"><a href="<?php echo $article_url; ?>" target="_blank" rel="noreferrer noopener"><figure class="wp-block-image size-large"><img decoding="async" loading="lazy" src="<?php echo $article_image_url; ?>" class="news-teaser-img" alt="<?php echo esc_attr( $article_title ); ?>"><?php if ( ! empty( $article_credit ) ) : ?><figcaption class="teaser-caption">Photo: <?php echo $article_credit; ?></figcaption><?php endif; ?></figure></a></div><div class="wp-block-column"><a href="<?php echo $article_url; ?>" target="_blank" rel="noreferrer noopener"><h2 class="wp-block-heading"><?php echo $article_title; ?></h2></a><p class="news-teaser"><?php echo $article_teaser; ?></p><p><a href="<?php echo $article_url; ?>" target="_blank" rel="noreferrer noopener">Source: <?php echo $article_source; ?></a></p></div></div></div></div>
         <?php endforeach; else : echo '<p>No articles found for this issue.</p>'; endif; ?>
 
-    </div> <!-- End of new wrapper div -->
+    </div> <!-- End of wrapper -->
 
     <?php
     return ob_get_clean();

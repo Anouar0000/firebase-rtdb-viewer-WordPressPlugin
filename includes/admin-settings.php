@@ -37,7 +37,6 @@ function firebase_connector_settings_init() {
     add_settings_field('sync_schedule', 'Sync Schedule', 'firebase_sync_schedule_callback', $page_slug, 'firebase_sync_section');
     add_settings_field('ongoing_sync_limit', 'Ongoing Sync Fetch Limit', 'firebase_ongoing_sync_limit_callback', $page_slug, 'firebase_sync_section');
     add_settings_field('admin_limit', 'Admin Tools Fetch Limit', 'firebase_admin_limit_callback', $page_slug, 'firebase_sync_section');
-    add_settings_field('create_as_draft', 'Safety: Create Posts as Drafts', 'firebase_create_as_draft_callback', $page_slug, 'firebase_sync_section');
 }
 add_action( 'admin_init', 'firebase_connector_settings_init' );
 
@@ -70,12 +69,7 @@ function firebase_admin_limit_callback() {
     echo '<input type="number" name="firebase_connector_settings[admin_limit]" value="' . absint($options['admin_limit'] ?? 200) . '" min="1">';
     echo '<p class="description">The number of recent issues to check when using the admin tools (Dry Run, Link, Backfill).</p>';
 }
-function firebase_create_as_draft_callback() {
-    $options = get_option('firebase_connector_settings');
-    $checked = isset($options['create_as_draft']) ? checked(1, $options['create_as_draft'], false) : 'checked="checked"';
-    echo '<input type="checkbox" name="firebase_connector_settings[create_as_draft]" value="1" ' . $checked . '>';
-    echo '<p class="description">When checked, all new posts will be saved as drafts instead of being published live.</p>';
-}
+
 function firebase_ongoing_sync_limit_callback() {
     $options = get_option('firebase_connector_settings');
     echo '<input type="number" name="firebase_connector_settings[ongoing_sync_limit]" value="' . absint($options['ongoing_sync_limit'] ?? 50) . '" min="1">';
@@ -108,7 +102,6 @@ function firebase_connector_sanitize_settings( $input ) {
     $sanitized['lang'] = isset($input['lang']) ? sanitize_key($input['lang']) : 'en';
     $sanitized['admin_limit'] = isset($input['admin_limit']) ? absint($input['admin_limit']) : 200;
     $sanitized['ongoing_sync_limit'] = isset($input['ongoing_sync_limit']) ? absint($input['ongoing_sync_limit']) : 50;
-    $sanitized['create_as_draft'] = isset($input['create_as_draft']) ? 1 : 0;
     $sanitized['enable_auto_sync'] = isset($input['enable_auto_sync']) ? 1 : 0;
     $sanitized['sync_schedule'] = isset($input['sync_schedule']) ? sanitize_key($input['sync_schedule']) : 'hourly';
     $old_enabled = $old_options['enable_auto_sync'] ?? 0;
@@ -173,7 +166,10 @@ function firebase_connector_tools_page_html() {
         </div>
         <div id="sync-tool-actions" style="margin-top: 15px; display: none;">
             <button id="create-selected" class="button">Create Selected Missing</button>
-<button id="link-selected" class="button">Link Selected Matches</button></div>
+            <button id="link-selected" class="button">Link Selected Matches</button>
+            <button id="publish-selected" class="button button-primary">Publish Selected Drafts</button>
+
+        </div>
         <table class="wp-list-table widefat fixed striped" style="margin-top: 20px; display: none;">
             <thead><tr><td id="cb" class="manage-column column-cb check-column"><input type="checkbox" id="cb-select-all-1"></td><th scope="col" class="manage-column">Firebase Headline</th><th scope="col" class="manage-column">Status</th><th scope="col" class="manage-column">Actions</th></tr></thead>
             <tbody id="firebase-sync-table-body"></tbody>
