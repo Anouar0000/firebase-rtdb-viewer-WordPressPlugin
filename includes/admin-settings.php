@@ -166,7 +166,7 @@ function firebase_connector_tools_page_html() {
              <form method="post" style="margin: 0;">
                 <input type="hidden" name="action" value="run_ongoing_sync">
                 <?php wp_nonce_field('firebase_run_ongoing_sync_nonce'); ?>
-                <?php submit_button('Sync Recent Items', 'secondary', 'submit', false); // Use submit_button for consistent styling ?>
+                <?php submit_button('Refresh Recent Items', 'secondary', 'submit', false); // Use submit_button for consistent styling ?>
             </form>
             <p class="description">Runs the same sync as your automatic schedule to quickly fetch the latest updates.</p>
         </div>

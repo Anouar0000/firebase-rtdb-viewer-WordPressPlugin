@@ -13,23 +13,52 @@ define( 'FIREBASE_CONNECTOR_MANAGED_KEY', '_firebase_connector_managed' );
  * ======================================================================
  */
 
+/**
+ * A truly robust function to find a post by its title, ignoring invisible differences.
+ *
+ * @param string $title The exact post title to search for.
+ * @return WP_Post|null The post object if found, otherwise null.
+ */
 function firebase_connector_find_post_by_title_flexibly( $title ) {
+    // Step 1: Broad search using WordPress's flexible engine.
     $query_args = [
         'post_type'      => 'post',
         'post_status'    => 'any',
         'posts_per_page' => 1,
-        's'              => $title, // 's' uses the flexible WordPress search logic
+        's'              => $title,
     ];
     $query = new WP_Query( $query_args );
-    // After a search, we must double-check that the title is an exact match to avoid partial matches
+
     if ( $query->have_posts() ) {
         $found_post = $query->posts[0];
-        // Compare titles after decoding HTML entities to handle quote differences
-        if ( html_entity_decode( $found_post->post_title, ENT_QUOTES ) === html_entity_decode( $title, ENT_QUOTES ) ) {
-            return $found_post;
+
+        // --- START OF THE FIX: NORMALIZE BOTH STRINGS ---
+
+        // 1. Get the raw titles
+        $post_title_raw = $found_post->post_title;
+        $firebase_title_raw = $title;
+
+        // 2. Decode any HTML entities (like & or ’)
+        $post_title_decoded = html_entity_decode($post_title_raw, ENT_QUOTES);
+        $firebase_title_decoded = html_entity_decode($firebase_title_raw, ENT_QUOTES);
+
+        // 3. Trim whitespace from the beginning and end of both strings
+        $post_title_trimmed = trim($post_title_decoded);
+        $firebase_title_trimmed = trim($firebase_title_decoded);
+
+        // 4. Replace any sequence of one or more whitespace characters with a single space
+        $post_title_normalized = preg_replace('/\s+/', ' ', $post_title_trimmed);
+        $firebase_title_normalized = preg_replace('/\s+/', ' ', $firebase_title_trimmed);
+
+        // --- END OF THE FIX ---
+
+        // 5. Final, robust comparison of the cleaned-up strings
+        if ( $post_title_normalized === $firebase_title_normalized ) {
+            return $found_post; // It's a true match!
         }
     }
-    return null;
+    
+    return null; // No match found
 }
 /**
  * Finds a post by its Firebase ID stored in post meta.
@@ -290,7 +319,7 @@ function firebase_connector_sync_issues_to_posts() {
             [ 
                 'post_title' => wp_strip_all_tags($issue_details['headline']), 
                 'post_content' => firebase_connector_generate_post_content($issue_details, $firebase_id), 
-                'post_status'  => 'publish', 
+                'post_status'  => 'draft', 
                 'post_type' => 'post',
                 'post_author'   => 29,
                 'post_category' => array( 4 )
@@ -314,25 +343,15 @@ function firebase_connector_sync_issues_to_posts() {
  * CONTENT GENERATION FUNCTIONS
  * ======================================================================
  */
+// in /includes/sync-handler.php
+
 function firebase_connector_generate_post_content( $issue, $issue_id ) {
-    // Get all the data from Firebase
-    $main_image_url = isset($issue['image']) ? esc_url($issue['image']) : '';
-    $headline = isset($issue['headline']) ? esc_attr($issue['headline']) : '';
-    $main_image_credit = isset($issue['imageCredit']) ? esc_html($issue['imageCredit']) : '';
-    $teaser = isset($issue['teaser']) ? wp_kses_post($issue['teaser']) : '';
+    $main_image_credit = isset( $issue['imageCredit'] ) ? esc_html( $issue['imageCredit'] ) : '';
+    $teaser = isset( $issue['teaser'] ) ? wp_kses_post( $issue['teaser'] ) : '';
     
     ob_start();
     ?>
-    
-    <!-- Use a simple wrapper div for easy styling -->
     <div class="firebase-post-content-wrapper">
-
-        <?php // GUARANTEED FIX: Manually display the main image here. ?>
-        <?php if ( ! empty( $main_image_url ) ) : ?>
-            <figure class="wp-block-image size-full firebase-main-image">
-                <img src="<?php echo $main_image_url; ?>" alt="<?php echo $headline; ?>" class="wp-post-image"/>
-            </figure>
-        <?php endif; ?>
 
         <?php if ( ! empty( $main_image_credit ) ) : ?><p class="featured-img-caption">Photo: <?php echo $main_image_credit; ?></p><?php endif; ?>
         <?php if ( ! empty( $teaser ) ) : ?><p class="vorspann"><?php echo $teaser; ?></p><?php endif; ?>
@@ -340,21 +359,46 @@ function firebase_connector_generate_post_content( $issue, $issue_id ) {
         <?php if ( ! empty( $issue['articles'] ) && is_array( $issue['articles'] ) ) :
             $articles = $issue['articles'];
             usort($articles, function($a, $b) { return ($a['position'] ?? 999) <=> ($b['position'] ?? 999); });
+            
+            // --- START OF CHANGES ---
+            
+            // 1. Initialize a counter for the loop
+            $article_counter = 0;
+
             foreach ( $articles as $article ) :
+                // 2. Increment the counter at the start of each loop
+                $article_counter++;
+
                 $article_url = isset( $article['url'] ) ? esc_url( $article['url'] ) : '#';
                 $article_image_url = isset( $article['imageUrl'] ) ? esc_url( $article['imageUrl'] ) : '';
                 $article_title = isset( $article['title'] ) ? esc_html( $article['title'] ) : 'No Title';
-                $article_teaser = isset( $article['teaser'] ) ? wp_kses_post( $article['teaser'] ) : '';
+                $article_teaser = isset( $article['teaser'] ) ? wp_kses_post( $article['teaser'] ) : ''; // Use wp_kses_post for teasers
                 $article_source = isset( $article['source'] ) ? esc_html( $article['source'] ) : 'Unknown Source';
                 $article_credit = isset( $article['credit'] ) ? esc_html( $article['credit'] ) : '';
         ?>
         <div class="wp-block-group" style="margin-bottom:30px;"><div class="wp-block-group__inner-container"><div class="wp-block-columns is-layout-flex"><div class="wp-block-column"><a href="<?php echo $article_url; ?>" target="_blank" rel="noreferrer noopener"><figure class="wp-block-image size-large"><img decoding="async" loading="lazy" src="<?php echo $article_image_url; ?>" class="news-teaser-img" alt="<?php echo esc_attr( $article_title ); ?>"><?php if ( ! empty( $article_credit ) ) : ?><figcaption class="teaser-caption">Photo: <?php echo $article_credit; ?></figcaption><?php endif; ?></figure></a></div><div class="wp-block-column"><a href="<?php echo $article_url; ?>" target="_blank" rel="noreferrer noopener"><h2 class="wp-block-heading"><?php echo $article_title; ?></h2></a><p class="news-teaser"><?php echo $article_teaser; ?></p><p><a href="<?php echo $article_url; ?>" target="_blank" rel="noreferrer noopener">Source: <?php echo $article_source; ?></a></p></div></div></div></div>
-        <?php endforeach; else : echo '<p>No articles found for this issue.</p>'; endif; ?>
+        
+        <?php
+                // 3. Check if the counter is at 5
+                if ( $article_counter === 5 ) :
+        ?>
+        
+        <!-- This is your custom HTML block that will be inserted after the 5th article -->
         <div class="ml-form-embed nl-cta"
             data-account="1712162:v1f8q9v0s8"
             data-form="3345723:b6d6q7">
         </div>
-        <!-- wp:shortcode -->
+
+        <?php
+                endif; // End the check for the 5th article
+            
+            endforeach; // End the main foreach loop
+
+            // --- END OF CHANGES ---
+
+        endif; 
+        ?>
+                <!-- wp:shortcode -->
         [Sassy_Social_Share]
         <!-- /wp:shortcode -->
 
@@ -369,9 +413,7 @@ function firebase_connector_generate_post_content( $issue, $issue_id ) {
         <!-- /wp:spacer -->
 
         <!-- wp:block {"ref":515} /-->
-
-    </div> <!-- End of wrapper -->
-
+    </div> <!-- End of firebase-post-content-wrapper -->
     <?php
     return ob_get_clean();
 }
