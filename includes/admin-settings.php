@@ -140,36 +140,64 @@ function firebase_connector_settings_page_html() {
 function firebase_connector_tools_page_html() {
     if ( ! current_user_can('manage_options') ) return;
     $dry_run_results = null;
+    if ( isset($_POST['action']) && $_POST['action'] === 'run_ongoing_sync' && check_admin_referer('firebase_run_ongoing_sync_nonce') ) {
+        // Call the same function the cron job uses
+        firebase_connector_sync_issues_to_posts(); 
+        add_settings_error('firebase_connector_messages', 'firebase_ongoing_sync_message', 'Ongoing sync has been run successfully.', 'success');
+    }
     if ( isset($_POST['action']) && $_POST['action'] === 'link_dry_run' && check_admin_referer('firebase_link_dry_run_nonce') ) { $dry_run_results = firebase_connector_dry_run_link_by_title(); add_settings_error('firebase_connector_messages', 'firebase_dry_run_message', 'Dry Run report is ready below.', 'info'); }
     if ( isset($_POST['action']) && $_POST['action'] === 'link_by_title' && check_admin_referer('firebase_link_by_title_nonce') ) { $result = firebase_connector_link_posts_by_title(); add_settings_error('firebase_connector_messages', 'firebase_link_message', "Linking complete. Linked: {$result['linked']}.", 'success'); }
     if ( isset($_POST['action']) && $_POST['action'] === 'create_missing' && check_admin_referer('firebase_create_missing_nonce') ) { $result = firebase_connector_create_missing_posts(); add_settings_error('firebase_connector_messages', 'firebase_create_message', "Backfill complete. Created {$result['created']} new posts as drafts. Skipped {$result['matches']} posts that already exist.", 'success'); }
     if ( isset($_POST['action']) && $_POST['action'] === 'sync_now' && check_admin_referer('firebase_sync_now_nonce') ) { firebase_connector_sync_issues_to_posts(); add_settings_error('firebase_connector_messages', 'firebase_sync_message', 'Ongoing sync complete!', 'success'); }
     ?>
-    <style>#sync-tool-controls { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; } #sync-tool-filters { display: flex; align-items: center; gap: 10px; } .tablenav-pages .current-page { background: #f0f0f1; border: 1px solid #dcdcde; }</style>
+    <style>
+        /* Simple styles for our controls */
+        #sync-tool-controls, #quick-sync-controls { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; margin-bottom: 20px;}
+        #sync-tool-filters { display: flex; align-items: center; gap: 10px; }
+        .tablenav-pages .current-page { background: #f0f0f1; border: 1px solid #dcdcde; }
+    </style>
     <div class="wrap">
         <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
         <?php settings_errors('firebase_connector_messages'); ?>
-        <p>This tool allows you to compare your WordPress posts with Firebase issues and sync them individually or in bulk.</p>
+
+        <hr>
+        <h2>Quick Actions</h2>
+        <div id="quick-sync-controls">
+             <form method="post" style="margin: 0;">
+                <input type="hidden" name="action" value="run_ongoing_sync">
+                <?php wp_nonce_field('firebase_run_ongoing_sync_nonce'); ?>
+                <?php submit_button('Sync Recent Items', 'secondary', 'submit', false); // Use submit_button for consistent styling ?>
+            </form>
+            <p class="description">Runs the same sync as your automatic schedule to quickly fetch the latest updates.</p>
+        </div>
+
+        <hr>
+        <h2>Interactive Sync Tool</h2>
+        <p>Use this tool for detailed management, linking old posts, and creating specific missing posts in bulk.</p>
+        
         <div id="sync-tool-controls">
-            <button id="scan-firebase-issues" class="button button-primary">Scan for Issues</button>
+            <button id="scan-firebase-issues" class="button button-primary">Scan All Issues</button>
             <div id="sync-tool-filters" style="display: none;">
                 <select id="status-filter">
                     <option value="all" selected>Show All</option>
-                    <option value="unsynced">Show Unsynced (Missing & Unlinked)</option>
-                    <option value="synced">Show Synced (Managed & Protected)</option>
-                    <option value="missing">Show Missing Only</option>
-                    <option value="match_unlinked">Show Unlinked Matches Only</option>
+                    <option value="unsynced">Show Unsynced</option>
+                    <option value="synced">Show Synced</option>
+                    <option value="missing">Missing Only</option>
+                    <option value="match_unlinked">Unlinked Matches Only</option>
+                    <option value="draft_managed">Drafts Only</option>
                 </select>
                 <input type="search" id="search-filter" placeholder="Search by headline...">
             </div>
             <span class="spinner"></span>
         </div>
+
         <div id="sync-tool-actions" style="margin-top: 15px; display: none;">
             <button id="create-selected" class="button">Create Selected Missing</button>
             <button id="link-selected" class="button">Link Selected Matches</button>
             <button id="publish-selected" class="button button-primary">Publish Selected Drafts</button>
-
         </div>
+
+
         <table class="wp-list-table widefat fixed striped" style="margin-top: 20px; display: none;">
             <thead><tr><td id="cb" class="manage-column column-cb check-column"><input type="checkbox" id="cb-select-all-1"></td><th scope="col" class="manage-column">Firebase Headline</th><th scope="col" class="manage-column">Status</th><th scope="col" class="manage-column">Actions</th></tr></thead>
             <tbody id="firebase-sync-table-body"></tbody>

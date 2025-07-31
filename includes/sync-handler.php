@@ -190,6 +190,52 @@ function firebase_publish_post_ajax_handler() {
 add_action('wp_ajax_firebase_publish_single_post', 'firebase_publish_post_ajax_handler');
 
 /**
+ * NEW: AJAX handler for updating (refreshing) a single managed post.
+ */
+function firebase_updater_ajax_handler() {
+    check_ajax_referer('firebase_sync_nonce', 'nonce');
+    
+    $post_id = absint($_POST['post_id'] ?? 0);
+    $issue_id = sanitize_text_field($_POST['issue_id'] ?? '');
+
+    if (empty($post_id) || empty($issue_id)) {
+        wp_send_json_error('Missing required IDs for updating.');
+    }
+
+    // Security check: Make sure this post is actually managed by the plugin
+    $is_managed = get_post_meta($post_id, FIREBASE_CONNECTOR_MANAGED_KEY, true);
+    if (!$is_managed) {
+        wp_send_json_error('This post is not managed by the plugin and cannot be updated.');
+    }
+
+    // Fetch the latest details from Firebase
+    $issue_details = firebase_issues_fetcher_get_single_issue_details($issue_id);
+    if (is_wp_error($issue_details)) {
+        wp_send_json_error('Could not fetch latest issue details from Firebase.');
+    }
+
+    // Prepare the data for updating the post
+    $post_data = [
+        'ID'           => $post_id,
+        'post_title'   => wp_strip_all_tags($issue_details['headline']),
+        'post_content' => firebase_connector_generate_post_content($issue_details, $issue_id),
+    ];
+
+    // Update the post
+    $result = wp_update_post($post_data, true); // Pass true to get error info
+
+    if (is_wp_error($result)) {
+        wp_send_json_error('Failed to update the post in the database.');
+    }
+
+    // Also update the featured image
+    firebase_connector_set_featured_image($post_id, $issue_details['image'], $issue_details['headline']);
+
+    wp_send_json_success(['message' => 'Post updated successfully!']);
+}
+add_action('wp_ajax_firebase_update_single_post', 'firebase_updater_ajax_handler');
+
+/**
  * ======================================================================
  * AUTOMATIC SYNC FUNCTION (for WP-Cron)
  * ======================================================================
@@ -304,6 +350,25 @@ function firebase_connector_generate_post_content( $issue, $issue_id ) {
         ?>
         <div class="wp-block-group" style="margin-bottom:30px;"><div class="wp-block-group__inner-container"><div class="wp-block-columns is-layout-flex"><div class="wp-block-column"><a href="<?php echo $article_url; ?>" target="_blank" rel="noreferrer noopener"><figure class="wp-block-image size-large"><img decoding="async" loading="lazy" src="<?php echo $article_image_url; ?>" class="news-teaser-img" alt="<?php echo esc_attr( $article_title ); ?>"><?php if ( ! empty( $article_credit ) ) : ?><figcaption class="teaser-caption">Photo: <?php echo $article_credit; ?></figcaption><?php endif; ?></figure></a></div><div class="wp-block-column"><a href="<?php echo $article_url; ?>" target="_blank" rel="noreferrer noopener"><h2 class="wp-block-heading"><?php echo $article_title; ?></h2></a><p class="news-teaser"><?php echo $article_teaser; ?></p><p><a href="<?php echo $article_url; ?>" target="_blank" rel="noreferrer noopener">Source: <?php echo $article_source; ?></a></p></div></div></div></div>
         <?php endforeach; else : echo '<p>No articles found for this issue.</p>'; endif; ?>
+        <div class="ml-form-embed nl-cta"
+            data-account="1712162:v1f8q9v0s8"
+            data-form="3345723:b6d6q7">
+        </div>
+        <!-- wp:shortcode -->
+        [Sassy_Social_Share]
+        <!-- /wp:shortcode -->
+
+        <!-- wp:spacer {"height":40} -->
+        <div style="height:40px" aria-hidden="true" class="wp-block-spacer"></div>
+        <!-- /wp:spacer -->
+
+        <!-- wp:block {"ref":2224} /-->
+
+        <!-- wp:spacer {"height":40} -->
+        <div style="height:40px" aria-hidden="true" class="wp-block-spacer"></div>
+        <!-- /wp:spacer -->
+
+        <!-- wp:block {"ref":515} /-->
 
     </div> <!-- End of wrapper -->
 
