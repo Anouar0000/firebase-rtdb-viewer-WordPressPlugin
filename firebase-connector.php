@@ -66,5 +66,3 @@ register_activation_hook( __FILE__, 'firebase_connector_activate' );
  * The action that our cron job will trigger. It calls our main sync function.
  */
 add_action( FIREBASE_CRON_HOOK, 'firebase_connector_sync_issues_to_posts' );
-
-

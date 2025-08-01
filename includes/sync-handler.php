@@ -13,53 +13,7 @@ define( 'FIREBASE_CONNECTOR_MANAGED_KEY', '_firebase_connector_managed' );
  * ======================================================================
  */
 
-/**
- * A truly robust function to find a post by its title, ignoring invisible differences.
- *
- * @param string $title The exact post title to search for.
- * @return WP_Post|null The post object if found, otherwise null.
- */
-function firebase_connector_find_post_by_title_flexibly( $title ) {
-    // Step 1: Broad search using WordPress's flexible engine.
-    $query_args = [
-        'post_type'      => 'post',
-        'post_status'    => 'any',
-        'posts_per_page' => 1,
-        's'              => $title,
-    ];
-    $query = new WP_Query( $query_args );
 
-    if ( $query->have_posts() ) {
-        $found_post = $query->posts[0];
-
-        // --- START OF THE FIX: NORMALIZE BOTH STRINGS ---
-
-        // 1. Get the raw titles
-        $post_title_raw = $found_post->post_title;
-        $firebase_title_raw = $title;
-
-        // 2. Decode any HTML entities (like & or ’)
-        $post_title_decoded = html_entity_decode($post_title_raw, ENT_QUOTES);
-        $firebase_title_decoded = html_entity_decode($firebase_title_raw, ENT_QUOTES);
-
-        // 3. Trim whitespace from the beginning and end of both strings
-        $post_title_trimmed = trim($post_title_decoded);
-        $firebase_title_trimmed = trim($firebase_title_decoded);
-
-        // 4. Replace any sequence of one or more whitespace characters with a single space
-        $post_title_normalized = preg_replace('/\s+/', ' ', $post_title_trimmed);
-        $firebase_title_normalized = preg_replace('/\s+/', ' ', $firebase_title_trimmed);
-
-        // --- END OF THE FIX ---
-
-        // 5. Final, robust comparison of the cleaned-up strings
-        if ( $post_title_normalized === $firebase_title_normalized ) {
-            return $found_post; // It's a true match!
-        }
-    }
-    
-    return null; // No match found
-}
 /**
  * Finds a post by its Firebase ID stored in post meta.
  */
@@ -84,39 +38,54 @@ function firebase_scanner_ajax_handler() {
     $admin_limit = $options['admin_limit'] ?? 200;
     $lang = $options['lang'] ?? 'en';
     $issues = firebase_issues_fetcher_get_issues($admin_limit, $lang);
-    if (is_wp_error($issues)) { wp_send_json_error('Failed to fetch issues from Firebase.'); }
+    if (is_wp_error($issues)) { wp_send_json_error('Failed to fetch issues.'); }
+
+    // --- BRUTE FORCE METHOD ---
+    // 1. Get ALL posts from the WordPress database once.
+    $all_wp_posts = get_posts([
+        'post_type'      => 'post',
+        'post_status'    => 'any',
+        'posts_per_page' => -1, // -1 means get ALL of them
+    ]);
+
+    // 2. Create a clean, normalized lookup table for fast searching.
+    $normalized_post_titles = [];
+    foreach ($all_wp_posts as $wp_post) {
+        $normalized_title = strtolower(trim(preg_replace('/\s+/', ' ', html_entity_decode($wp_post->post_title, ENT_QUOTES, 'UTF-8'))));
+        $normalized_post_titles[$normalized_title] = $wp_post->ID; // Store the Post ID
+    }
+    // --- END OF BRUTE FORCE SETUP ---
 
     $status_list = [];
     foreach ($issues as $issue) {
-        if (!is_array($issue) || !isset($issue['id']) || !isset($issue['headline'])) continue;
+        if (!is_array($issue) || empty($issue['id']) || empty($issue['headline'])) continue;
         
         $status = 'missing';
-        $post_id_to_return = null; // Use a single variable for the post ID
+        $post_id_to_return = null;
 
         $post_by_id = firebase_connector_find_post_by_firebase_id($issue['id']);
         if ($post_by_id) {
             $post_status = get_post_status($post_by_id);
             if ($post_status === 'draft') {
-                $status = 'draft_managed'; // New status for drafts
+                $status = 'draft_managed';
             } else {
                 $is_managed = get_post_meta($post_by_id, FIREBASE_CONNECTOR_MANAGED_KEY, true);
                 $status = $is_managed ? 'synced_managed' : 'synced_manual';
             }
             $post_id_to_return = $post_by_id;
         } else {
-            $post_by_title = firebase_connector_find_post_by_title_flexibly($issue['headline']);
-            if ($post_by_title) {
+            // --- BRUTE FORCE SEARCH ---
+            // 3. Normalize the Firebase headline in the exact same way.
+            $normalized_fb_headline = strtolower(trim(preg_replace('/\s+/', ' ', html_entity_decode($issue['headline'], ENT_QUOTES, 'UTF-8'))));
+            
+            // 4. Check if this normalized headline exists as a key in our lookup table.
+            if (isset($normalized_post_titles[$normalized_fb_headline])) {
                 $status = 'match_unlinked';
-                $post_id_to_return = $post_by_title->ID; // ** THIS IS THE CHANGE **
+                $post_id_to_return = $normalized_post_titles[$normalized_fb_headline];
             }
         }
         
-        $status_list[] = [
-            'id'       => $issue['id'],
-            'headline' => $issue['headline'],
-            'status'   => $status,
-            'post_id'  => $post_id_to_return // Now it's always included if a post is found
-        ];
+        $status_list[] = ['id' => $issue['id'], 'headline' => $issue['headline'], 'status' => $status, 'post_id' => $post_id_to_return, 'debug' => null];
     }
     wp_send_json_success($status_list);
 }

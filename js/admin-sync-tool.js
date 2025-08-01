@@ -179,6 +179,7 @@ jQuery(document).ready(function($) {
         $.post(firebase_sync_data.ajax_url, { action: 'firebase_scan_issues', nonce: firebase_sync_data.nonce })
             .done(response => {
                 if (response.success) {
+                    console.log('Data received from server:', response);
                     allIssuesData = response.data;
                     currentPage = 1;
                     renderDisplay();
