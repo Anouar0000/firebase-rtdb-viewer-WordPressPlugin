@@ -16,11 +16,12 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @return array|WP_Error An array of issues on success, WP_Error on failure.
  */
 function firebase_issues_fetcher_get_issues( $limit, $lang ) {
-    $options = get_option( 'firebase_issues_fetcher_settings' );
+    $options = get_option( 'firebase_connector_settings' );
     $base_url = isset( $options['base_url'] ) ? trailingslashit( $options['base_url'] ) : '';
-    $api_token = isset( $options['api_token'] ) ? $options['api_token'] : '';
+    $api_token = $options['api_token'] ?? '';
 
-    if ( empty( $base_url ) || empty( $api_token ) ) {
+    // empty( $base_url ) || 
+    if (empty( $api_token ) ) {
         return new WP_Error( 'firebase_config_missing', 'Firebase Cloud Functions Base URL or API Token is not configured.' );
     }
 
@@ -80,7 +81,7 @@ function firebase_issues_fetcher_get_issues( $limit, $lang ) {
  * @return string The URL for the single issue page.
  */
 function firebase_issues_fetcher_get_single_issue_url( $issue_id, $lang ) {
-    $options = get_option( 'firebase_issues_fetcher_settings' );
+    $options = get_option( 'firebase_connector_settings' );
     $single_page_slug = isset( $options['single_page_slug'] ) ? $options['single_page_slug'] : 'issue-detail';
 
     // Construct the URL to the single issue page with query parameters
@@ -103,11 +104,11 @@ function firebase_issues_fetcher_get_single_issue_url( $issue_id, $lang ) {
  * @return array|WP_Error An array of issue details on success, WP_Error on failure.
  */
 function firebase_issues_fetcher_get_single_issue_details( $issue_id ) {
-    $options = get_option( 'firebase_issues_fetcher_settings' );
-    $base_url = isset( $options['base_url'] ) ? trailingslashit( $options['base_url'] ) : '';
-    $api_token = isset( $options['api_token'] ) ? $options['api_token'] : '';
+    $options = get_option( 'firebase_connector_settings' );
+    //$base_url = isset( $options['base_url'] ) ? trailingslashit( $options['base_url'] ) : '';
+    $api_token = $options['api_token'] ?? '';
 
-    if ( empty( $base_url ) || empty( $api_token ) ) {
+    if (empty( $api_token ) ) {
         return new WP_Error( 'firebase_config_missing', 'Firebase Cloud Functions Base URL or API Token is not configured for single issue fetch.' );
     }
 

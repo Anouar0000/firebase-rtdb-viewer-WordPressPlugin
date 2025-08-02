@@ -233,6 +233,65 @@ function firebase_updater_ajax_handler() {
 }
 add_action('wp_ajax_firebase_update_single_post', 'firebase_updater_ajax_handler');
 
+
+/**
+ * AJAX handler for the frontend "infinite scroll".
+ */
+function firebase_load_more_issues_handler() {
+    check_ajax_referer('firebase_load_more_nonce', 'nonce');
+
+    $page = absint($_POST['page'] ?? 1);
+    $lang = sanitize_key($_POST['lang'] ?? 'en');
+    $per_page = 10; // Number of items to load per scroll
+    $initial_posts = 50; // The number of posts loaded initially
+
+    // Calculate the total number of issues we need to fetch from the start
+    $limit = $initial_posts + ($page * $per_page);
+    $all_issues = firebase_issues_fetcher_get_issues($limit, $lang);
+
+    if (is_wp_error($all_issues) || empty($all_issues)) {
+        wp_send_json_error(); // Send error to stop the script
+    }
+
+    // Calculate the starting position (offset) for our new "slice" of posts
+    $offset = $initial_posts + (($page - 1) * $per_page);
+    $new_issues = array_slice($all_issues, $offset, $per_page);
+
+    if (empty($new_issues)) {
+        wp_send_json_error(); // No more issues to load
+    }
+
+    // Generate the HTML for only the new items
+    ob_start();
+    foreach ($new_issues as $issue) {
+        if (!isset($issue['id'])) continue;
+        $post_id = firebase_connector_find_post_by_firebase_id($issue['id']);
+        if (!$post_id || get_post_status($post_id) !== 'publish') continue;
+
+        $post_link = get_permalink($post_id);
+        $headline = esc_html($issue['headline'] ?? get_the_title($post_id));
+        ?>
+        <article class="wpcap-post wpbf-post">
+            <div class="post-grid-inner">
+                <div class="post-grid-thumbnail">
+                    <a href="<?php echo esc_url($post_link); ?>">
+                        <?php if (has_post_thumbnail($post_id)) { echo get_the_post_thumbnail($post_id, 'large'); } ?>
+                    </a>
+                </div>
+                <div class="post-grid-text-wrap">
+                    <h3 class="title"><a href="<?php echo esc_url($post_link); ?>"><?php echo $headline; ?></a></h3>
+                </div>
+            </div>
+        </article>
+        <?php
+    }
+    $html = ob_get_clean();
+
+    wp_send_json_success(['html' => $html, 'items_loaded' => count($new_issues)]);
+}
+add_action('wp_ajax_load_more_firebase_issues', 'firebase_load_more_issues_handler');
+add_action('wp_ajax_nopriv_load_more_firebase_issues', 'firebase_load_more_issues_handler');
+
 /**
  * ======================================================================
  * AUTOMATIC SYNC FUNCTION (for WP-Cron)

@@ -1,35 +1,45 @@
 <?php
-// /includes/frontend-shortcodes.php
+// /includes/frontend-shortcodes.php (Your Code + Infinite Scroll)
 
-// Exit if accessed directly.
-if ( ! defined( 'ABSPATH' ) ) {
-    exit;
-}
+if ( ! defined( 'ABSPATH' ) ) exit;
 
 /**
- * Enqueues the frontend stylesheet for our shortcodes.
- */
-// in /includes/frontend-shortcodes.php
-
-/**
- * Enqueues the frontend stylesheet for our plugin.
+ * Enqueues the frontend stylesheet AND the new script.
  */
 function firebase_connector_enqueue_styles() {
     global $post;
-
-    // Condition 1: Load on any page that has the [firebase_issues_list] shortcode.
-    $load_on_list_page = is_a($post, 'WP_Post') && has_shortcode($post->post_content, 'firebase_issues_list');
-
-    // Condition 2: Load on any single post page that was created by our plugin.
-    $load_on_single_post = is_singular('post') && get_post_meta(get_the_ID(), '_firebase_issue_id', true);
-
-    // If either condition is true, load the stylesheet.
-    if ( $load_on_list_page || $load_on_single_post ) {
+    if ( is_a( $post, 'WP_Post' ) && ( has_shortcode( $post->post_content, 'firebase_issues_list' ) ) ) {
+        // Enqueue the stylesheet (your original code)
         wp_enqueue_style(
             'firebase-connector-styles',
-            plugin_dir_url( __FILE__ ) . 'frontend-shortcodes.css', // Assumes CSS is in the same folder
+            plugin_dir_url( __FILE__ ) . 'frontend-shortcodes.css',
             [],
-            '1.2.4' // Increment version to bust the cache
+            '1.2.5' // Increment version
+        );
+        
+        // ** ADDITION: Enqueue the JavaScript for infinite scroll **
+        wp_enqueue_script(
+            'firebase-connector-loader',
+            plugin_dir_url( __FILE__ ) . '../js/frontend-loader.js',
+            ['jquery'],
+            '1.1.0',
+            true // Load in footer
+        );
+        
+        // ** ADDITION: Pass data to the script **
+        wp_localize_script('firebase-connector-loader', 'firebase_loader_data', [
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce'    => wp_create_nonce('firebase_load_more_nonce')
+        ]);
+    }
+    
+    // Also load CSS on single posts
+    if ( is_singular('post') && get_post_meta(get_the_ID(), '_firebase_issue_id', true) ) {
+        wp_enqueue_style(
+            'firebase-connector-styles',
+            plugin_dir_url( __FILE__ ) . 'frontend-shortcodes.css',
+            [],
+            '1.2.5'
         );
     }
 }
@@ -37,36 +47,24 @@ add_action( 'wp_enqueue_scripts', 'firebase_connector_enqueue_styles' );
 
 
 /**
- * ======================================================================
- * SHORTCODE: Display a grid of issues (FINAL VERSION with Title)
- * ======================================================================
+ * SHORTCODE: Display a grid of issues.
  */
 function firebase_issues_list_shortcode( $atts ) {
-    $options = get_option( 'firebase_issues_fetcher_settings' );
+    // ** UPDATED: Use the new settings name **
+    $options = get_option( 'firebase_connector_settings' );
     
-    // ** NEW: Added 'title' attribute with a default value of "News" **
-    $atts = shortcode_atts(
-        array(
-            'limit' => $options['limit'] ?? 10,
-            'lang'  => get_locale(),
-            'title' => 'News', // You can change this default to whatever you like
-        ),
-        $atts,
-        'firebase_issues_list'
-    );
+    $atts = shortcode_atts([
+        // ** UPDATED: Initial load is now 50, not from settings **
+        'limit' => 50,
+        'lang'  => $options['lang'] ?? 'en',
+        'title' => 'News',
+    ], $atts, 'firebase_issues_list');
     
-    $lang_parts = explode( '_', $atts['lang'] );
-    $lang = $lang_parts[0];
-    $limit = absint( $atts['limit'] );
-    $title = esc_html( $atts['title'] );
-    
-    // This function still fetches the list of IDs and basic info
-    $issues = firebase_issues_fetcher_get_issues( $limit, $lang );
+    $issues = firebase_issues_fetcher_get_issues( absint( $atts['limit'] ), sanitize_key( $atts['lang'] ) );
 
     if ( is_wp_error( $issues ) ) {
-        return '<p class="fc-error-message">Error: Could not retrieve news issues. ' . esc_html($issues->get_error_message()) . '</p>';
+        return '<p class="fc-error-message">Error: Could not retrieve news issues.</p>';
     }
-
     if ( empty( $issues ) ) {
         return '<p>No news issues found for this language.</p>';
     }
@@ -74,27 +72,28 @@ function firebase_issues_list_shortcode( $atts ) {
     ob_start();
     ?>
     <div class="fc-issues-block">
-        <?php if ( ! empty( $title ) ) : ?>
-            <h2 class="fc-issues-title"><?php echo $title; ?></h2>
+        <?php if ( ! empty( $atts['title'] ) ) : ?>
+            <h2 class="fc-issues-title"><?php echo esc_html( $atts['title'] ); ?></h2>
         <?php endif; ?>
 
         <div class="wpcap-grid">
-            <div class="wpcap-grid-container">
+            <!-- ADDED ID for JavaScript to target -->
+            <div class="wpcap-grid-container" id="firebase-issues-grid">
                 <?php foreach ( $issues as $issue ) :
-                    $issue_id = esc_attr( $issue['id'] );
+                    if ( !isset($issue['id']) ) continue;
+
+                    $post_id = firebase_connector_find_post_by_firebase_id( $issue['id'] );
+                    
+                    // ADDED CHECK: Only show published posts
+                    if ( ! $post_id || get_post_status($post_id) !== 'publish' ) {
+                        continue;
+                    }
+
+                    $post_link = get_permalink( $post_id );
                     $headline = esc_html( $issue['headline'] );
                     $image_url = esc_url( $issue['image'] );
-                    
-                    // ** THE BIG CHANGE IS HERE **
-                    // Find the WordPress post that corresponds to this Firebase issue
-                    $post_id = firebase_connector_find_post_by_firebase_id( $issue_id );
-
-                    // If we found a post, get its permalink. Otherwise, the link goes nowhere.
-                    $post_link = $post_id ? get_permalink( $post_id ) : '#';
                     ?>
-                    
-                    <?php if ($post_id) : // Only render the item if a corresponding post exists ?>
-                    <article id="post-<?php echo $issue_id; ?>" class="wpcap-post wpbf-post">
+                    <article id="post-ext-<?php echo esc_attr($issue['id']); ?>" class="wpcap-post wpbf-post">
                         <div class="post-grid-inner">
                             <div class="post-grid-thumbnail">
                                 <a href="<?php echo esc_url( $post_link ); ?>">
@@ -102,22 +101,25 @@ function firebase_issues_list_shortcode( $atts ) {
                                 </a>
                             </div>
                             <div class="post-grid-text-wrap">
-                                <h3 class="title">
-                                    <a href="<?php echo esc_url( $post_link ); ?>"><?php echo $headline; ?></a>
-                                </h3>
+                                <h3 class="title"><a href="<?php echo esc_url( $post_link ); ?>"><?php echo $headline; ?></a></h3>
                             </div>
                         </div>
                     </article>
-                    <?php endif; ?>
-
                 <?php endforeach; ?>
             </div>
         </div>
+        
+        <!-- ** ADDITION: The invisible trigger for infinite scroll ** -->
+        <div class="firebase-load-trigger"
+            data-page="1"
+            data-lang="<?php echo esc_attr($atts['lang']); ?>"
+            data-per-page="10">
+            <div class="firebase-spinner" style="display: none; margin: 40px auto; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+        </div>
+        <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+
     </div>
     <?php
-
     return ob_get_clean();
 }
 add_shortcode( 'firebase_issues_list', 'firebase_issues_list_shortcode' );
-
-
