@@ -6,6 +6,8 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 // Define our two meta keys
 define( 'FIREBASE_ISSUE_ID_META_KEY', '_firebase_issue_id' );
 define( 'FIREBASE_CONNECTOR_MANAGED_KEY', '_firebase_connector_managed' );
+define( 'FIREBASE_IMAGE_URL_META_KEY', '_firebase_image_url' ); // Define a new key for the URL
+
 
 /**
  * ======================================================================
@@ -234,63 +236,79 @@ function firebase_updater_ajax_handler() {
 add_action('wp_ajax_firebase_update_single_post', 'firebase_updater_ajax_handler');
 
 
+// in /includes/sync-handler.php
+
 /**
- * AJAX handler for the frontend "infinite scroll".
+ * NEW: AJAX handler for the "Quick Sync" pre-flight check.
+ * This function just gets the list of issues to be processed.
  */
-function firebase_load_more_issues_handler() {
-    check_ajax_referer('firebase_load_more_nonce', 'nonce');
+function firebase_quick_sync_preflight_handler() {
+    check_ajax_referer('firebase_quick_sync_nonce', 'nonce');
+    
+    $options = get_option('firebase_connector_settings');
+    $sync_limit = $options['ongoing_sync_limit'] ?? 50;
+    $lang = $options['lang'] ?? 'en';
 
-    $page = absint($_POST['page'] ?? 1);
-    $lang = sanitize_key($_POST['lang'] ?? 'en');
-    $per_page = 10; // Number of items to load per scroll
-    $initial_posts = 50; // The number of posts loaded initially
-
-    // Calculate the total number of issues we need to fetch from the start
-    $limit = $initial_posts + ($page * $per_page);
-    $all_issues = firebase_issues_fetcher_get_issues($limit, $lang);
-
-    if (is_wp_error($all_issues) || empty($all_issues)) {
-        wp_send_json_error(); // Send error to stop the script
+    $issues = firebase_issues_fetcher_get_issues($sync_limit, $lang); 
+    
+    if (is_wp_error($issues) || empty($issues)) {
+        wp_send_json_error('No recent issues found to sync.');
     }
 
-    // Calculate the starting position (offset) for our new "slice" of posts
-    $offset = $initial_posts + (($page - 1) * $per_page);
-    $new_issues = array_slice($all_issues, $offset, $per_page);
+    // Reverse the order to process oldest first
+    $issues_in_reverse_order = array_reverse($issues);
 
-    if (empty($new_issues)) {
-        wp_send_json_error(); // No more issues to load
-    }
+    // We only need to send back the IDs
+    $issue_ids = wp_list_pluck($issues_in_reverse_order, 'id');
 
-    // Generate the HTML for only the new items
-    ob_start();
-    foreach ($new_issues as $issue) {
-        if (!isset($issue['id'])) continue;
-        $post_id = firebase_connector_find_post_by_firebase_id($issue['id']);
-        if (!$post_id || get_post_status($post_id) !== 'publish') continue;
-
-        $post_link = get_permalink($post_id);
-        $headline = esc_html($issue['headline'] ?? get_the_title($post_id));
-        ?>
-        <article class="wpcap-post wpbf-post">
-            <div class="post-grid-inner">
-                <div class="post-grid-thumbnail">
-                    <a href="<?php echo esc_url($post_link); ?>">
-                        <?php if (has_post_thumbnail($post_id)) { echo get_the_post_thumbnail($post_id, 'large'); } ?>
-                    </a>
-                </div>
-                <div class="post-grid-text-wrap">
-                    <h3 class="title"><a href="<?php echo esc_url($post_link); ?>"><?php echo $headline; ?></a></h3>
-                </div>
-            </div>
-        </article>
-        <?php
-    }
-    $html = ob_get_clean();
-
-    wp_send_json_success(['html' => $html, 'items_loaded' => count($new_issues)]);
+    wp_send_json_success(['issue_ids' => $issue_ids]);
 }
-add_action('wp_ajax_load_more_firebase_issues', 'firebase_load_more_issues_handler');
-add_action('wp_ajax_nopriv_load_more_firebase_issues', 'firebase_load_more_issues_handler');
+add_action('wp_ajax_firebase_quick_sync_preflight', 'firebase_quick_sync_preflight_handler');
+
+/**
+ * NEW: AJAX handler that processes a SINGLE issue for the Quick Sync.
+ */
+function firebase_quick_sync_process_single_handler() {
+    check_ajax_referer('firebase_quick_sync_nonce', 'nonce');
+    
+    $issue_id = sanitize_text_field($_POST['issue_id'] ?? '');
+    if (empty($issue_id)) {
+        wp_send_json_error('No issue ID provided.');
+    }
+
+    $existing_post_id = firebase_connector_find_post_by_firebase_id($issue_id);
+
+    if ($existing_post_id) {
+        $is_managed = get_post_meta($existing_post_id, FIREBASE_CONNECTOR_MANAGED_KEY, true);
+        if ($is_managed) {
+            // It's managed, let's update it
+            $issue_details = firebase_issues_fetcher_get_single_issue_details($issue_id);
+            if (is_wp_error($issue_details)) { wp_send_json_error('Could not fetch details for update.'); }
+            $post_data = ['ID' => $existing_post_id, 'post_title' => wp_strip_all_tags($issue_details['headline']), 'post_content' => firebase_connector_generate_post_content($issue_details, $issue_id)];
+            wp_update_post($post_data);
+            firebase_connector_set_featured_image($existing_post_id, $issue_details['image'], $issue_details['headline']);
+            wp_send_json_success('updated');
+        } else {
+            // It's a protected manual post, skip it
+            wp_send_json_success('skipped');
+        }
+    } else {
+        // It's missing, let's create it (always as draft)
+        $issue_details = firebase_issues_fetcher_get_single_issue_details($issue_id);
+        if (is_wp_error($issue_details)) { wp_send_json_error('Could not fetch details for creation.'); }
+        $post_data = ['post_title' => wp_strip_all_tags($issue_details['headline']), 'post_content' => firebase_connector_generate_post_content($issue_details, $issue_id), 'post_status' => 'draft', 'post_type' => 'post', 'post_author' => 29, 'post_category' => [4]];
+        $new_post_id = wp_insert_post($post_data);
+        if ($new_post_id && !is_wp_error($new_post_id)) {
+            update_post_meta($new_post_id, FIREBASE_ISSUE_ID_META_KEY, $issue_id);
+            update_post_meta($new_post_id, FIREBASE_CONNECTOR_MANAGED_KEY, true);
+            firebase_connector_set_featured_image($new_post_id, $issue_details['image'], $issue_details['headline']);
+            wp_send_json_success('created');
+        } else {
+            wp_send_json_error('Failed to create post.');
+        }
+    }
+}
+add_action('wp_ajax_firebase_quick_sync_process_single', 'firebase_quick_sync_process_single_handler');
 
 /**
  * ======================================================================
@@ -301,8 +319,17 @@ add_action('wp_ajax_nopriv_load_more_firebase_issues', 'firebase_load_more_issue
 /**
  * Main sync function for ONGOING, day-to-day updates.
  */
+
+/**
+ * Main sync function for the "Sync Recent Items" button and cron job.
+ * NEW LOGIC:
+ * - Reverses order to process oldest first.
+ * - Auto-links any unlinked matches it finds.
+ * - Creates any truly missing posts as DRAFTS.
+ * - NEVER updates or publishes existing posts.
+ */
 function firebase_connector_sync_issues_to_posts() {
-    error_log('Firebase Sync: Automatic task started.');
+    error_log('Firebase Sync: Safe sync task started.');
     $options = get_option('firebase_connector_settings');
     $sync_limit = $options['ongoing_sync_limit'] ?? 50;
     $lang = $options['lang'] ?? 'en';
@@ -313,46 +340,57 @@ function firebase_connector_sync_issues_to_posts() {
         return;
     }
 
-    $created = 0; $updated = 0; $skipped = 0;
+    // Process oldest items first
+    $issues_in_reverse_order = array_reverse($issues);
 
-    foreach ($issues as $issue_summary) {
-        if (!is_array($issue_summary) || !isset($issue_summary['id'])) continue;
+    $created = 0; $linked = 0; $skipped = 0;
+
+    // We need our brute-force title lookup table
+    $all_wp_posts = get_posts(['post_type' => 'post', 'post_status' => 'any', 'posts_per_page' => -1]);
+    $normalized_post_titles = [];
+    foreach ($all_wp_posts as $wp_post) {
+        $normalized_title = strtolower(trim(preg_replace('/\s+/', ' ', html_entity_decode($wp_post->post_title, ENT_QUOTES, 'UTF-8'))));
+        $normalized_post_titles[$normalized_title] = $wp_post->ID;
+    }
+
+    foreach ($issues_in_reverse_order as $issue_summary) {
+        if (!is_array($issue_summary) || !isset($issue_summary['id']) || empty($issue_summary['headline'])) continue;
         
         $firebase_id = $issue_summary['id'];
+        
+        // First, check if a post is ALREADY linked by ID
         $existing_post_id = firebase_connector_find_post_by_firebase_id($firebase_id);
 
         if ($existing_post_id) {
-            $is_managed = get_post_meta($existing_post_id, FIREBASE_CONNECTOR_MANAGED_KEY, true);
-            if ($is_managed) {
-                // UPDATE if managed
-                $issue_details = firebase_issues_fetcher_get_single_issue_details($firebase_id);
-                if (is_wp_error($issue_details)) continue;
-                $post_data = 
-                [ 
-                    'ID' => $existing_post_id,
-                    'post_title' => wp_strip_all_tags($issue_details['headline']), 
-                    'post_content' => firebase_connector_generate_post_content($issue_details, $firebase_id) 
-                ];
-                wp_update_post($post_data);
-                firebase_connector_set_featured_image($existing_post_id, $issue_details['image'], $issue_details['headline']);
-                $updated++;
-            } else {
-                $skipped++;
-            }
+            // A post is already linked. Do nothing. Skip it.
+            $skipped++;
+            continue;
+        }
+
+        // If not linked, check if a post with a matching title exists
+        $normalized_fb_headline = strtolower(trim(preg_replace('/\s+/', ' ', html_entity_decode($issue_summary['headline'], ENT_QUOTES, 'UTF-8'))));
+        
+        if (isset($normalized_post_titles[$normalized_fb_headline])) {
+            // A match was found! Let's link it.
+            $post_id_to_link = $normalized_post_titles[$normalized_fb_headline];
+            update_post_meta($post_id_to_link, FIREBASE_ISSUE_ID_META_KEY, $firebase_id);
+            $linked++;
         } else {
-            // CREATE if missing
+            // No linked post and no title match. This post is truly missing.
+            // Create it as a DRAFT.
             $issue_details = firebase_issues_fetcher_get_single_issue_details($firebase_id);
             if (is_wp_error($issue_details)) continue;
-            $post_data = 
-            [ 
+
+            $post_data = [ 
                 'post_title' => wp_strip_all_tags($issue_details['headline']), 
                 'post_content' => firebase_connector_generate_post_content($issue_details, $firebase_id), 
-                'post_status'  => 'draft', 
+                'post_status'  => 'draft', // ALWAYS create as a draft
                 'post_type' => 'post',
                 'post_author'   => 29,
-                'post_category' => array( 4 )
+                'post_category' => [4]
             ];
             $new_post_id = wp_insert_post($post_data);
+
             if ($new_post_id && !is_wp_error($new_post_id)) {
                 update_post_meta($new_post_id, FIREBASE_ISSUE_ID_META_KEY, $firebase_id);
                 update_post_meta($new_post_id, FIREBASE_CONNECTOR_MANAGED_KEY, true);
@@ -361,7 +399,7 @@ function firebase_connector_sync_issues_to_posts() {
             }
         }
     }
-    error_log("Firebase Sync: Finished. Created:{$created}, Updated:{$updated}, Skipped (manual posts):{$skipped}.");
+    error_log("Firebase Sync: Finished. Created drafts:{$created}, Auto-linked:{$linked}, Skipped (already linked):{$skipped}.");
 }
 // Note: The hook to trigger this is now in the main plugin file
 // add_action( FIREBASE_CRON_HOOK, 'firebase_connector_sync_issues_to_posts' );
@@ -447,12 +485,47 @@ function firebase_connector_generate_post_content( $issue, $issue_id ) {
 }
 
 function firebase_connector_set_featured_image( $post_id, $image_url, $post_title ) {
-    if ( empty( $image_url ) ) return;
+    if ( empty( $image_url ) ) {
+        // If the new image URL is empty, we shouldn't do anything.
+        // Optionally, you could uncomment the next line to remove the featured image if it's deleted in Firebase.
+        // delete_post_thumbnail( $post_id );
+        return;
+    }
+
+    // --- START OF NEW LOGIC ---
+
+    // 1. Get the previously saved image URL from this post's metadata.
+    $existing_image_url = get_post_meta( $post_id, FIREBASE_IMAGE_URL_META_KEY, true );
+
+    // 2. Compare the new URL from Firebase with the old one.
+    if ( $image_url === $existing_image_url ) {
+        // The URLs are the same. The correct image is already set. Do nothing.
+        return;
+    }
+
+    // --- END OF NEW LOGIC ---
+    // If we get here, it means the image is new or has been updated.
+
     require_once( ABSPATH . 'wp-admin/includes/media.php' );
     require_once( ABSPATH . 'wp-admin/includes/file.php' );
     require_once( ABSPATH . 'wp-admin/includes/image.php' );
+    
+    // Set a timeout for the download
+    add_filter( 'http_request_timeout', function() { return 30; } );
+
     $attachment_id = media_sideload_image( $image_url, $post_id, $post_title, 'id' );
+    
+    // Remove the timeout filter
+    remove_filter( 'http_request_timeout', function() { return 30; } );
+
+
     if ( ! is_wp_error( $attachment_id ) ) {
+        // Success! Set the new image as the featured image.
         set_post_thumbnail( $post_id, $attachment_id );
+        
+        // ** CRUCIAL STEP **: Save the new URL to the post meta for future checks.
+        update_post_meta( $post_id, FIREBASE_IMAGE_URL_META_KEY, $image_url );
+    } else {
+        error_log("Firebase Connector: Failed to sideload image for post {$post_id}. URL: {$image_url}. Error: " . $attachment_id->get_error_message());
     }
 }

@@ -231,4 +231,75 @@ jQuery(document).ready(function($) {
         const isChecked = $(this).is(':checked');
         $('#firebase-sync-table-body .row-checkbox').prop('checked', isChecked);
     });
+
+    // --- QUICK SYNC PROGRESS BAR LOGIC ---
+
+$('#quick-sync-button').on('click', function() {
+    const $button = $(this);
+    const $progressBarContainer = $('#quick-sync-progress-bar-container');
+    const $progressBar = $('#quick-sync-progress-bar');
+    const $progressLabel = $('#quick-sync-progress-label');
+
+    $button.prop('disabled', true);
+    $progressLabel.text('Checking for issues to sync...').show();
+    $progressBar.css('width', '0%');
+    $progressBarContainer.show();
+
+    // 1. Pre-flight check to get the list of IDs
+    $.post(firebase_sync_data.ajax_url, {
+        action: 'firebase_quick_sync_preflight',
+        nonce: firebase_sync_data.quick_sync_nonce // We need a new nonce for this
+    }).done(function(response) {
+        if (response.success && response.data.issue_ids.length > 0) {
+            processIssueQueue(response.data.issue_ids);
+        } else {
+            $progressLabel.text(response.data || 'No new issues to sync.');
+            $button.prop('disabled', false);
+        }
+    }).fail(function() {
+        $progressLabel.text('Error: Could not connect to the server.');
+        $button.prop('disabled', false);
+    });
+
+    // 2. Function to process the queue of IDs one by one
+    function processIssueQueue(issueIds) {
+        let processedCount = 0;
+        const totalCount = issueIds.length;
+        $progressLabel.text(`Processing ${processedCount}/${totalCount}...`);
+
+        function processNext() {
+            if (issueIds.length === 0) {
+                // We're done!
+                $progressLabel.text(`Sync complete! Processed ${totalCount} items.`);
+                $progressBar.css('width', '100%');
+                $button.prop('disabled', false);
+                // Optional: Reload the table data
+                if ($('#scan-firebase-issues').length) {
+                    $('#scan-firebase-issues').trigger('click');
+                }
+                return;
+            }
+
+            const issueId = issueIds.shift(); // Get the next ID from the front of the array
+
+            $.post(firebase_sync_data.ajax_url, {
+                action: 'firebase_quick_sync_process_single',
+                nonce: firebase_sync_data.quick_sync_nonce, // Same new nonce
+                issue_id: issueId
+            }).always(function() {
+                processedCount++;
+                const percentage = (processedCount / totalCount) * 100;
+                $progressBar.css('width', percentage + '%');
+                $progressLabel.text(`Processing ${processedCount}/${totalCount}...`);
+                
+                // Process the next item in the queue
+                processNext();
+            });
+        }
+
+        // Start the process
+        processNext();
+    }
 });
+});
+

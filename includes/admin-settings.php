@@ -37,6 +37,7 @@ function firebase_connector_settings_init() {
     add_settings_field('sync_schedule', 'Sync Schedule', 'firebase_sync_schedule_callback', $page_slug, 'firebase_sync_section');
     add_settings_field('ongoing_sync_limit', 'Ongoing Sync Fetch Limit', 'firebase_ongoing_sync_limit_callback', $page_slug, 'firebase_sync_section');
     add_settings_field('admin_limit', 'Admin Tools Fetch Limit', 'firebase_admin_limit_callback', $page_slug, 'firebase_sync_section');
+    
 }
 add_action( 'admin_init', 'firebase_connector_settings_init' );
 
@@ -162,14 +163,17 @@ function firebase_connector_tools_page_html() {
 
         <hr>
         <h2>Quick Actions</h2>
-        <div id="quick-sync-controls">
-             <form method="post" style="margin: 0;">
-                <input type="hidden" name="action" value="run_ongoing_sync">
-                <?php wp_nonce_field('firebase_run_ongoing_sync_nonce'); ?>
-                <?php submit_button('Refresh Recent Items', 'secondary', 'submit', false); // Use submit_button for consistent styling ?>
-            </form>
-            <p class="description">Runs the same sync as your automatic schedule to quickly fetch the latest updates.</p>
-        </div>
+        <div id="quick-sync-container" style="border:1px solid #c3c4c7; padding:10px 20px;">
+            <h3>Run Ongoing Sync Manually</h3>
+            <p>This will check the most recent issues (based on your settings), create any brand new ones, and update any existing "Synced (Managed)" posts.</p>
+    
+            <button id="quick-sync-button" class="button button-secondary">Sync Recent Items</button>
+
+            <!-- NEW: Progress Bar UI -->
+            <div id="quick-sync-progress-bar-container" style="display: none; margin-top: 15px; background-color: #eee; border-radius: 4px; padding: 3px; border: 1px solid #ccc;">
+                <div id="quick-sync-progress-bar" style="width: 0%; height: 20px; background-color: #3498db; border-radius: 2px; text-align: center; color: white; line-height: 20px;"></div>
+            </div>
+        <div id="quick-sync-progress-label" style="display: none; margin-top: 5px; font-style: italic; color: #555;"></div>
 
         <hr>
         <h2>Interactive Sync Tool</h2>
@@ -209,8 +213,12 @@ function firebase_connector_tools_page_html() {
 }
 
 function firebase_connector_enqueue_admin_scripts($hook_suffix) {
+    
     if ( 'firebase-connector_page_firebase-connector-tools' !== $hook_suffix ) return;
     wp_enqueue_script('firebase-connector-sync-tool', plugin_dir_url( __FILE__ ) . '../js/admin-sync-tool.js', ['jquery'], '1.0.1', true);
-    wp_localize_script('firebase-connector-sync-tool', 'firebase_sync_data', ['ajax_url' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('firebase_sync_nonce')]);
-}
+    wp_localize_script('firebase-connector-sync-tool', 'firebase_sync_data', [
+    'ajax_url' => admin_url('admin-ajax.php'),
+    'nonce'    => wp_create_nonce('firebase_sync_nonce'),
+    'quick_sync_nonce' => wp_create_nonce('firebase_quick_sync_nonce') // Add this
+    ]);}
 add_action('admin_enqueue_scripts', 'firebase_connector_enqueue_admin_scripts');
