@@ -1,99 +1,126 @@
 === Firebase Connector ===
 Contributors: anouarbenhamza
-Tags: firebase, firestore, api, sync, posts, news, connector
-Requires at least: 5.0
-Tested up to: 6.2
-Stable tag: 2.0.0
-Requires PHP: 7.2
+Tags: firebase, firestore, api, sync, posts, news, connector, ajax, bulk edit
+Requires at least: 5.5
+Tested up to: 6.5
+Stable tag: 3.0.0
+Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Seamlessly sync news issues from Google Firebase Firestore directly into native WordPress posts.
+Seamlessly sync news issues from Google Firebase Firestore into native WordPress posts with powerful interactive admin tools.
+Dedicated to squirrel-news: https://squirrel-news.net/
 
 == Description ==
 
-Tired of managing content in two places? The Firebase Connector plugin bridges the gap between your Firebase Firestore database and your WordPress website.
+The Firebase Connector plugin transforms your WordPress site into a dynamic frontend for your Firebase Firestore database. It moves beyond simple display shortcodes to provide a robust, professional-grade synchronization system.
 
-Instead of relying on shortcodes to display dynamic data on a single page, this plugin implements a robust synchronization system. It periodically fetches "issues" (e.g., news roundups, articles) from your Firebase Cloud Functions and intelligently creates or updates them as native WordPress posts.
+The plugin fetches "issues" (e.g., news roundups, articles) from your Firebase Cloud Functions and intelligently creates or updates them as native WordPress posts. This provides massive benefits for SEO, performance, and compatibility with the entire WordPress ecosystem.
 
-This approach provides massive benefits:
-*   **Superior SEO:** Each issue gets its own URL, title, and content, making it fully indexable by search engines.
-*   **Native WordPress Experience:** Content is stored as real posts, meaning they work with virtually all other plugins (SEO, caching, related posts, etc.) and are styled perfectly by your theme.
-*   **Automated Workflow:** A WP-Cron job runs in the background to keep your site's content fresh without any manual intervention.
-*   **Improved Performance:** Content is served from your WordPress database, which is typically faster and more reliable than making live API calls for every page view.
+The centerpiece is the **Interactive Sync Tool**, an AJAX-powered admin page that gives you full control over the synchronization process. You can scan for differences, link existing content, and create, publish, or update posts individually or in bulk, all without reloading the page.
 
 **Key Features:**
-*   **Automatic Hourly Sync:** Keeps your WordPress content up-to-date with Firebase.
-*   **Native Post Creation:** Converts Firebase issues into standard WordPress posts.
-*   **Featured Image Support:** Automatically downloads the issue image and sets it as the post's featured image.
-*   **Flexible List Shortcode:** Use `[firebase_issues_list]` to display a grid of your latest issues anywhere on your site.
-*   **Manual Sync Control:** A "Sync Now" button in the admin settings for immediate updates.
+*   **Powerful Interactive Admin Tool:** Scan for differences between Firebase and WordPress, see the status of each issue (Synced, Missing, Unlinked), and perform actions.
+*   **Bulk Actions:** Create, link, or publish hundreds of posts with a few clicks, using a progress bar for clear feedback.
+*   **Automatic Background Syncing:** A configurable WP-Cron job keeps your site's content fresh. Enable it and choose a schedule (hourly, daily, weekly) that suits your needs.
+*   **Native Post Creation:** Converts Firebase issues into standard WordPress posts for superior SEO and plugin compatibility.
+*   **Featured Image Support:** Intelligently downloads and attaches images, preventing duplicates.
+*   **Infinite Scroll Shortcode:** Use `[firebase_issues_list]` to display a fast-loading grid of your issues that automatically loads more as the user scrolls.
 
 == Installation ==
 
 1.  Upload the `firebase-connector` folder to the `/wp-content/plugins/` directory.
 2.  Activate the plugin through the 'Plugins' menu in WordPress.
-3.  Go to **Settings -> Firebase Connector** in your WordPress admin panel.
-4.  Fill in your Firebase Cloud Functions URL and your secret API Token.
-5.  Click the **"Sync Now"** button to perform the first import and create your initial posts.
-6.  Go to any page or post and use the `[firebase_issues_list]` shortcode to display your newly created issue posts.
+3.  A new **"Firebase Connector"** menu will appear in your WordPress admin sidebar.
+4.  Go to **Firebase Connector -> Settings** and enter your API Token and configure other options.
+5.  Go to **Firebase Connector -> Tools** to begin the initial content sync.
 
-== Usage ==
+== Tutorial: Initial Setup and Syncing Your Content ==
 
-### Configuration
+This tutorial will guide you through syncing your content for the first time. This process is designed to be safe and give you full control.
 
-All settings are located under **Settings -> Firebase Connector**.
+**Step 1: Configure Your Settings**
 
-*   **Cloud Functions Base URL:** The base URL for your project's Cloud Functions. (This is no longer directly used for API calls in version 2.0+, but is kept for potential future use. The API endpoints are currently hardcoded in `api-client.php`).
-*   **API Token:** The secret token required to authenticate with your Cloud Functions.
-*   **Default Issues Limit:** The default number of issues to show when using the `[firebase_issues_list]` shortcode.
-*   **Default Language:** The default language for fetching issues.
-*   **Manual Sync:** A button to trigger the sync process immediately.
+1.  Navigate to **Firebase Connector -> Settings**.
+2.  Enter your secret **API Token**. This is the most important step.
+3.  In the "Automation Settings" section, set the **Admin Tools Fetch Limit** to a high number (e.g., `300`) to ensure it can see all your historical issues.
+4.  Set the **Ongoing Sync Fetch Limit** to a smaller number (e.g., `50`) for efficient daily checks.
+5.  Leave **Enable Automatic Sync** unchecked for now.
+6.  Configure your desired "Frontend" settings.
+7.  Click **Save Settings**.
 
-### Displaying the Issues List
+**Step 2: Scan for Differences**
 
-To display a grid of your synced issues, use the following shortcode on any page, post, or widget area:
+1.  Navigate to **Firebase Connector -> Tools**.
+2.  Click the **"Scan All Issues"** button.
+3.  The interactive table will load and show you the status of each issue from Firebase compared to your WordPress posts. You will see several statuses:
+    *   **Match Found (Unlinked):** The plugin found a WordPress post with the same title. It just needs to be linked. This is for your manually-created posts.
+    *   **Missing:** The plugin could not find any post for this issue. It needs to be created.
+    *   **Synced (Protected):** A post that is linked but will not be updated by the plugin.
+    *   **Synced (Managed):** A post that was created by the plugin and will be updated automatically.
+
+**Step 3: Link Your Existing Posts**
+
+1.  Use the filter dropdown to select **"Unlinked Matches Only"**.
+2.  Check the "Select All" box at the top of the table.
+3.  Click the **"Link Selected Matches"** button. The tool will process each one, and their status will change to "Synced (Protected)".
+
+**Step 4: Create Missing Posts as Drafts**
+
+1.  Use the filter dropdown to select **"Missing Only"**.
+2.  Check the "Select All" box.
+3.  Click the **"Create Selected Missing"** button.
+4.  The tool will create all the missing posts and their status will change to **"Draft (Managed)"**. They are not yet visible on your live site.
+
+**Step 5: Review and Publish**
+
+1.  Go to the main WordPress **Posts -> All Posts** screen. You will see all the new posts with a "Draft" status.
+2.  Click "Preview" on a few to ensure the layout and content look correct with your theme.
+3.  Go back to **Firebase Connector -> Tools**. Filter for **"Drafts Only"**.
+4.  Select the drafts you are happy with and click the **"Publish Selected Drafts"** button. They are now live.
+
+**Step 6: Enable Automation**
+
+Once you are confident that everything is working perfectly, go back to **Firebase Connector -> Settings**, check the **Enable Automatic Sync** box, choose your schedule, and save. The plugin will now handle everything for you in the background.
+
+== Shortcode Usage ==
+
+To display a grid of your synced issues with infinite scroll, use the following shortcode on any page:
 
 `[firebase_issues_list]`
 
-**Shortcode Attributes:**
-*   `title`: (Optional) The heading to display above the list. Default: "News".
+**Attributes:**
+*   `title`: The heading to display above the list. Default: "News".
     *   Example: `[firebase_issues_list title="Latest Updates"]`
-*   `limit`: (Optional) The number of issues to display. Overrides the default setting.
-    *   Example: `[firebase_issues_list limit="6"]`
-*   `lang`: (Optional) The language of issues to fetch. Overrides the default setting.
+*   `lang`: The language of issues to fetch. Overrides the default setting.
     *   Example: `[firebase_issues_list lang="de"]`
-
-A complete example:
-`[firebase_issues_list title="Our Top 5 Stories" limit="5"]`
 
 == Frequently Asked Questions ==
 
-**Q: Do I need a special page to show the single issue details?**
-A: No. With version 2.0 and later, the plugin creates an actual WordPress post for each issue. The `[firebase_issues_list]` shortcode will link directly to these posts, which are then displayed by your theme's native post template. You should delete any old page that was using the `[firebase_single_issue]` shortcode.
+**Q: My "Create Post" button is returning an error.**
+A: This is almost always because the "Post Author" or "Post Category" ID is incorrect for your specific WordPress site. These are hard-coded in the `/includes/sync-handler.php` file in the `firebase_processor_ajax_handler` function. You must find the correct User ID and Category ID from your admin dashboard and update these values in the code.
 
-**Q: Posts are not being created automatically.**
-A: The automatic sync relies on WP-Cron, which only runs when someone visits your website. If you have a very low-traffic site, the cron job may not run frequently. For guaranteed execution, you can set up a real cron job on your server to hit the WordPress cron endpoint. Alternatively, you can always trigger a sync manually from the plugin's settings page.
-
-**Q: The design of the single post looks slightly different from my other pages.**
-A: This is expected and is a feature! The issue is now a Post, so its design is controlled by your theme's template for single posts (e.g., `single.php`). This means it will have the same layout, sidebars, and features (like comments) as your other blog posts, making it fit perfectly with your site.
-
-**Q: How can I sync the issues to a Custom Post Type instead of the default 'Post'?**
-A: This requires a small code modification. In the file `includes/sync-handler.php`, find the `firebase_connector_sync_issues_to_posts` and `firebase_connector_find_post_by_firebase_id` functions. In the arguments arrays within those functions, change `'post_type' => 'post'` to `'post_type' => 'your_custom_post_type_slug'`.
+**Q: The layout of my single posts is wrong.**
+A: The plugin generates standard WordPress content blocks. The final appearance is controlled by your theme's CSS. The plugin includes a basic stylesheet (`/css/frontend-styles.css`) with layout rules. You can add your own overriding styles to this file or in your theme's Customizer (`Appearance -> Customize -> Additional CSS`).
 
 == Changelog ==
 
+= 3.0.0 =
+*   **FEATURE:** Added a powerful, AJAX-powered Interactive Sync Tool for managing content.
+*   **FEATURE:** Added bulk actions: Create, Link, and Publish selected items.
+*   **FEATURE:** Added an "Unlink" action for individual posts.
+*   **FEATURE:** Added a "Refresh" action to update a single managed post.
+*   **FEATURE:** Added a "Quick Sync" button with a progress bar for manual headless syncs.
+*   **FEATURE:** Implemented "Infinite Scroll" for the `[firebase_issues_list]` shortcode.
+*   **IMPROVEMENT:** Refactored entire admin UI into "Tools" and "Settings" submenus.
+*   **IMPROVEMENT:** Refactored PHP files into a cleaner, more organized structure (`ajax-handlers.php`, `cron-handler.php`, `post-helpers.php`).
+*   **IMPROVEMENT:** Implemented a robust "brute-force" title matching system to find unlinked posts reliably.
+*   **IMPROVEMENT:** Added intelligent image handling to prevent duplicate downloads.
+*   **IMPROVEMENT:** Added full control over the automatic sync schedule (enable/disable, frequency).
+
 = 2.0.0 =
-*   **MAJOR REFACTOR:** Plugin now syncs Firebase issues to create native WordPress posts instead of relying on a shortcode to display single issue details.
-*   **NEW:** Added `includes/sync-handler.php` to manage all post creation and update logic.
-*   **NEW:** Implemented a WP-Cron job (`hourly`) to automatically sync issues in the background. Schedule is set on plugin activation.
-*   **NEW:** Added a "Sync Now" button to the admin settings page for manual synchronization.
-*   **NEW:** Issues now have their main image set as the post's "Featured Image".
-*   **UPDATE:** The `[firebase_issues_list]` shortcode has been updated to query for and link to the newly created posts instead of a generic page with URL parameters.
-*   **DEPRECATED:** The `[firebase_single_issue]` shortcode and its corresponding page are no longer needed and have been removed. The page slug setting has also been removed.
+*   Major refactor to sync Firebase issues to native WordPress posts.
+*   Added WP-Cron job for basic automation.
 
 = 1.0.0 =
-*   Initial release.
-*   Fetches issues from Firebase via API calls.
-*   Uses `[firebase_issues_list]` shortcode to display a grid of issues.
-*   Uses `[firebase_single_issue]` shortcode on a dedicated page to display issue details.
+*   Initial release. Fetched data live on page load using shortcodes.
