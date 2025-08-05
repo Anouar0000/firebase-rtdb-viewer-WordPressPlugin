@@ -1,0 +1,50 @@
+function renderSingleRow($row, item) {
+    let statusText = '';
+    let actionHtml = '';
+    let checkboxHtml = '<th scope="row" class="check-column"><input type="checkbox" class="row-checkbox" data-issue-id="' + item.id + '" data-post-id="' + (item.post_id || '') + '"></th>';
+
+    // Base "Create Test Draft" button for all statuses except "missing"
+    const createTestDraftButton = '<button class="button button-small action-create" data-issue-id="' + item.id + '">Create Test Draft</button>';
+
+    switch (item.status) {
+        case 'missing':
+            statusText = 'Missing';
+            actionHtml = '<button class="button button-primary button-small action-create" data-issue-id="' + item.id + '">Create Post</button>';
+            break;
+            
+        case 'draft_managed':
+            statusText = 'Draft (Managed)';
+            actionHtml = '<button class="button button-primary button-small action-publish" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Publish</button>';
+            // Add the "Create Test Draft" button as a secondary action
+            actionHtml += ' ' + createTestDraftButton;
+            break;
+
+        case 'synced_managed':
+            statusText = 'Synced (Up-to-date)';
+            actionHtml = '<button class="button button-small action-refresh" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Refresh</button> <button class="button button-small action-unlink" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Unlink</button>';
+            // Add the "Create Test Draft" button as a secondary action
+            actionHtml += ' ' + createTestDraftButton;
+            checkboxHtml = '<th scope="row" class="check-column"></th>';
+            break;
+
+        case 'synced_manual':
+            statusText = 'Synced (Protected)';
+            actionHtml = 'Protected <button class="button button-small action-unlink" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Unlink</button>';
+            // Add the "Create Test Draft" button as a secondary action
+            actionHtml += ' ' + createTestDraftButton;
+            checkboxHtml = '<th scope="row" class="check-column"></th>';
+            break;
+
+        case 'match_unlinked':
+            statusText = 'Match Found (Unlinked)';
+            actionHtml = '<button class="button button-primary button-small action-link" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Link Post</button>';
+            // Add the "Create Test Draft" button as a secondary action
+            actionHtml += ' ' + createTestDraftButton;
+            break;
+    }
+
+    $row.find('.status-cell .status-label').html(statusText);
+    $row.find('.actions-cell').html(actionHtml + '<span class="spinner row-spinner"></span>');
+    $row.find('.check-column').replaceWith(checkboxHtml);
+    $row.attr('class', 'status-' + item.status);
+}

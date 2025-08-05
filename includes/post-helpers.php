@@ -2,6 +2,11 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+// Define the meta key for the image URL to prevent re-downloads
+if ( ! defined( 'FIREBASE_IMAGE_URL_META_KEY' ) ) {
+    define( 'FIREBASE_IMAGE_URL_META_KEY', '_firebase_image_source_url' );
+}
+
 // --- Helper Functions ---
 
 function firebase_connector_find_post_by_firebase_id( $firebase_id ) {
@@ -11,13 +16,25 @@ function firebase_connector_find_post_by_firebase_id( $firebase_id ) {
 }
 
 function firebase_connector_generate_post_content( $issue, $issue_id ) {
+    // ** NEW: Language-aware logic **
+    $options = get_option('firebase_connector_settings');
+    $current_lang = $options['lang'] ?? 'en';
+    $translation_strings = [
+        'photo'  => ($current_lang === 'de') ? 'Foto' : 'Photo',
+        'source' => ($current_lang === 'de') ? 'Quelle' : 'Source',
+    ];
+
     $main_image_credit = isset( $issue['imageCredit'] ) ? esc_html( $issue['imageCredit'] ) : '';
     $teaser = isset( $issue['teaser'] ) ? wp_kses_post( $issue['teaser'] ) : '';
+    
     ob_start();
     ?>
     <div class="firebase-post-content-wrapper">
-        <?php if ( ! empty( $main_image_credit ) ) : ?><p class="featured-img-caption">Photo: <?php echo $main_image_credit; ?></p><?php endif; ?>
+        <?php if ( ! empty( $main_image_credit ) ) : ?>
+            <p class="featured-img-caption"><?php echo esc_html($translation_strings['photo']); ?>: <?php echo $main_image_credit; ?></p>
+        <?php endif; ?>
         <?php if ( ! empty( $teaser ) ) : ?><p class="vorspann"><?php echo $teaser; ?></p><?php endif; ?>
+        
         <?php if ( ! empty( $issue['articles'] ) && is_array( $issue['articles'] ) ) :
             $articles = $issue['articles'];
             usort($articles, function($a, $b) { return ($a['position'] ?? 999) <=> ($b['position'] ?? 999); });
@@ -27,11 +44,16 @@ function firebase_connector_generate_post_content( $issue, $issue_id ) {
                 $article_url = esc_url( $article['url'] ?? '#' );
                 $article_image_url = esc_url( $article['imageUrl'] ?? '' );
                 $article_title = esc_html( $article['title'] ?? 'No Title' );
-                $article_teaser = wp_kses_post( $article['teaser'] ?? '' );
+
+                // ** NEW: Robust teaser cleaning **
+                $raw_teaser = $article['teaser'] ?? '';
+                $cleaned_teaser = str_replace('<p> </p>', '', $raw_teaser);
+                $article_teaser = wp_kses_post($cleaned_teaser);
+
                 $article_source = esc_html( $article['source'] ?? 'Unknown Source' );
                 $article_credit = esc_html( $article['credit'] ?? '' );
         ?>
-        <div class="wp-block-group" style="margin-bottom:30px;"><div class="wp-block-group__inner-container"><div class="wp-block-columns is-layout-flex"><div class="wp-block-column"><a href="<?php echo $article_url; ?>" target="_blank" rel="noreferrer noopener"><figure class="wp-block-image size-large"><img decoding="async" loading="lazy" src="<?php echo $article_image_url; ?>" class="news-teaser-img" alt="<?php echo esc_attr( $article_title ); ?>"><?php if ( ! empty( $article_credit ) ) : ?><figcaption class="teaser-caption">Photo: <?php echo $article_credit; ?></figcaption><?php endif; ?></figure></a></div><div class="wp-block-column"><a href="<?php echo $article_url; ?>" target="_blank" rel="noreferrer noopener"><h2 class="wp-block-heading"><?php echo $article_title; ?></h2></a><p class="news-teaser"><?php echo $article_teaser; ?></p><p><a href="<?php echo $article_url; ?>" target="_blank" rel="noreferrer noopener">Source: <?php echo $article_source; ?></a></p></div></div></div></div>
+        <div class="wp-block-group" style="margin-bottom:30px;"><div class="wp-block-group__inner-container"><div class="wp-block-columns is-layout-flex"><div class="wp-block-column"><a href="<?php echo $article_url; ?>" target="_blank" rel="noreferrer noopener"><figure class="wp-block-image size-large"><img decoding="async" loading="lazy" src="<?php echo $article_image_url; ?>" class="news-teaser-img" alt="<?php echo esc_attr( $article_title ); ?>"><?php if ( ! empty( $article_credit ) ) : ?><figcaption class="teaser-caption"><?php echo esc_html($translation_strings['photo']); ?>: <?php echo $article_credit; ?></figcaption><?php endif; ?></figure></a></div><div class="wp-block-column"><a href="<?php echo $article_url; ?>" target="_blank" rel="noreferrer noopener"><h2 class="wp-block-heading"><?php echo $article_title; ?></h2></a><p class="news-teaser"><?php echo $article_teaser; ?></p><p><a href="<?php echo $article_url; ?>" target="_blank" rel="noreferrer noopener"><?php echo esc_html($translation_strings['source']); ?>: <?php echo $article_source; ?></a></p></div></div></div></div>
         <?php
                 if ( $article_counter === 5 ) :
         ?>
@@ -51,20 +73,72 @@ function firebase_connector_generate_post_content( $issue, $issue_id ) {
     return ob_get_clean();
 }
 
+/**
+ * ======================================================================
+ * INTELLIGENT FEATURED IMAGE SETTER (TEST MODE: LOCAL SEARCH ONLY)
+ * ======================================================================
+ */
 function firebase_connector_set_featured_image( $post_id, $image_url, $post_title ) {
-    if ( empty( $image_url ) ) return;
+    if ( empty($image_url) ) {
+        return;
+    }
+    
+    // Prevent re-processing the same image if the URL hasn't changed.
     $existing_image_url = get_post_meta( $post_id, FIREBASE_IMAGE_URL_META_KEY, true );
-    if ( $image_url === $existing_image_url ) return;
+    if ( $image_url === $existing_image_url && has_post_thumbnail($post_id) ) {
+        return;
+    }
+
     require_once( ABSPATH . 'wp-admin/includes/media.php' );
     require_once( ABSPATH . 'wp-admin/includes/file.php' );
     require_once( ABSPATH . 'wp-admin/includes/image.php' );
-    add_filter( 'http_request_timeout', function() { return 30; } );
-    $attachment_id = media_sideload_image( $image_url, $post_id, $post_title, 'id' );
-    remove_filter( 'http_request_timeout', function() { return 30; } );
-    if ( ! is_wp_error( $attachment_id ) ) {
+
+    $attachment_id = 0;
+    
+    // --- CDN-AWARE LOCAL IMAGE SEARCH ---
+    
+    // 1. Attempt to convert a potential CDN URL back to its original WordPress URL.
+    $original_wp_url = '';
+    $path_fragment = '/wp-content/uploads/';
+    $fragment_pos = strpos($image_url, $path_fragment);
+
+    if ($fragment_pos !== false) {
+        $relative_path = substr($image_url, $fragment_pos);
+        $original_wp_url = get_site_url(null, $relative_path);
+    }
+
+    // 2. Search the database using the converted original URL.
+    if ( ! empty($original_wp_url) ) {
+        global $wpdb;
+        $attachment_id = $wpdb->get_var( $wpdb->prepare(
+            "SELECT ID FROM $wpdb->posts WHERE post_type = 'attachment' AND guid = %s",
+            $original_wp_url
+        ) );
+    }
+    
+    // --- FALLBACK TO DOWNLOADING ---
+
+    // 3. If we STILL don't have an attachment_id (because it was a truly external image,
+    // or the local search failed), then we proceed with downloading it.
+    if ( ! $attachment_id ) {
+        add_filter( 'http_request_timeout', function() { return 30; } );
+        $sideload_result = media_sideload_image( $image_url, $post_id, $post_title, 'id' );
+        remove_filter( 'http_request_timeout', function() { return 30; } );
+
+        if ( ! is_wp_error( $sideload_result ) ) {
+            $attachment_id = $sideload_result;
+        } else {
+            error_log("Firebase Connector: Failed to sideload image for post {$post_id}. URL: {$image_url}. Error: " . $sideload_result->get_error_message());
+            return; // Stop if sideloading failed
+        }
+    }
+
+    // --- FINAL STEP: SET THE THUMBNAIL ---
+
+    // 4. If we have a valid attachment ID from either method, set it as the thumbnail.
+    if ( $attachment_id && ! is_wp_error( $attachment_id ) ) {
         set_post_thumbnail( $post_id, $attachment_id );
+        // Store the source URL so we can avoid re-processing it next time.
         update_post_meta( $post_id, FIREBASE_IMAGE_URL_META_KEY, $image_url );
-    } else {
-        error_log("Firebase Connector: Failed to sideload image for post {$post_id}. URL: {$image_url}. Error: " . $attachment_id->get_error_message());
     }
 }
