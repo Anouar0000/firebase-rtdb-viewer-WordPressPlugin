@@ -168,14 +168,21 @@ function firebase_connector_tools_page_html() {
         </div>
         
         <div id="sync-tool-filters" style="display: none; margin-top: 15px; margin-bottom: 15px;">
-            <select id="status-filter">
-                <option value="all" selected>Show All</option>
-                <option value="unsynced">Show Unsynced</option>
-                <option value="synced">Show Synced</option>
-                <option value="missing">Missing Only</option>
-                <option value="match_unlinked">Unlinked Matches Only</option>
-                <option value="draft_managed">Drafts Only</option>
-            </select>
+        <!-- Filter Dropdown -->
+        <select id="status-filter">
+            <option value="all" selected>Show All</option>
+            <option value="unsynced">Show Unsynced</option>
+            <option value="synced">Show Synced</option>
+            <option value="missing">Missing Only</option>
+            <option value="match_unlinked">Unlinked Matches Only</option>
+            <option value="draft_managed">Drafts Only</option>
+        </select>
+
+        <!-- Sort Dropdown -->
+        <select id="sort-filter">
+            <option value="newest">Sort by Newest First</option>
+            <option value="oldest">Sort by Oldest First</option>
+        </select>
             <input type="search" id="search-filter" placeholder="Search by headline...">
         </div>
 
@@ -194,6 +201,7 @@ function firebase_connector_tools_page_html() {
             <th scope="col" id="headline" class="manage-column column-title column-primary">
                 <span>Firebase Headline</span>
             </th>
+            <th scope="col" class="manage-column">Date</th>
             <th scope="col" id="status" class="manage-column column-tags">
                 Status
             </th>
@@ -213,6 +221,7 @@ function firebase_connector_tools_page_html() {
             <th scope="col" class="manage-column column-title column-primary">
                 <span>Firebase Headline</span>
             </th>
+            <th scope="col" class="manage-column">Date</th>
             <th scope="col" class="manage-column column-tags">
                 Status
             </th>
@@ -234,6 +243,7 @@ function firebase_connector_tools_page_html() {
             <br>
             <small>Firebase ID: {{issueId}}</small>
         </td>
+        <td class="date-cell column-date" data-colname="Date">{{date}}</td>
         <td class="status-cell column-tags" data-colname="Status">
             <span class="status-label">{{status}}</span>
         </td>

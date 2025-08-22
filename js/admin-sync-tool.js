@@ -83,6 +83,17 @@ jQuery(document).ready(function($) {
         // ** THESE TWO LINES WERE MISSING AND ARE NOW FIXED **
         const startIndex = (currentPage - 1) * itemsPerPage;
         const endIndex = startIndex + itemsPerPage;
+
+        const sortOrder = $('#sort-filter').val();
+        filteredData.sort((a, b) => {
+            if (sortOrder === 'newest') {
+                // Compare dates descending
+                return new Date(b.date) - new Date(a.date);
+            } else {
+                // Compare dates ascending
+                return new Date(a.date) - new Date(b.date);
+            }
+        });
         
         const paginatedData = filteredData.slice(startIndex, endIndex);
 
@@ -105,7 +116,8 @@ jQuery(document).ready(function($) {
             let rowHtml = template
                 .replace(/{{issueId}}/g, item.id)
                 .replace('{{headline}}', item.headline)
-                .replace('{{status}}', ''); // Start with an empty status
+                .replace('{{status}}', '')
+                .replace('{{date}}', item.date);
             
             const $row = $(rowHtml);
             $tableBody.append($row);
@@ -115,37 +127,48 @@ jQuery(document).ready(function($) {
         });
     }
 
-    function renderSingleRow($row, item) {
-        let statusText = '', actionHtml = '', checkboxHtml = '<th scope="row" class="check-column"><input type="checkbox" class="row-checkbox" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '"></th>';
-        switch (item.status) {
-            case 'missing':
-                statusText = 'Missing';
-                actionHtml = '<button class="button button-small action-create" data-issue-id="' + item.id + '">Create Post</button>';
-                break;
-            case 'draft_managed':
-                statusText = 'Draft (Managed)';
-                actionHtml = '<button class="button button-primary button-small action-publish" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Publish</button>';
-                break;
-            case 'synced_managed':
-                statusText = 'Synced (Up-to-date)';
-                actionHtml = '<button class="button button-small action-refresh" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Refresh</button> <button class="button button-small action-unlink" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Unlink</button>';
-                checkboxHtml = '<th scope="row" class="check-column"></th>';
-                break;
-            case 'synced_manual':
-                statusText = 'Synced (Protected)';
-                actionHtml = '<button class="button button-small action-unlink" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Unlink</button>';
-                checkboxHtml = '<th scope="row" class="check-column"></th>';
-                break;
-            case 'match_unlinked':
-                statusText = 'Match Found (Unlinked)';
-                actionHtml = '<button class="button button-primary button-small action-link" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Link Post</button>';
-                break;
-        }
-        $row.find('.status-cell .status-label').text(statusText);
-        $row.find('.actions-cell').html(actionHtml + '<span class="spinner row-spinner"></span>');
-        $row.find('.check-column').replaceWith(checkboxHtml);
-        $row.attr('class', 'status-' + item.status);
+function renderSingleRow($row, item) {
+    let statusText = '', actionHtml = '', checkboxHtml = '<th scope="row" class="check-column"><input type="checkbox" class="row-checkbox" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '"></th>';
+    
+    let postLinks = '';
+    if (item.post_id) {
+        const editUrl = `/wp-admin/post.php?post=${item.post_id}&action=edit`;
+        const previewUrl = `/?p=${item.post_id}&preview=true`;
+        // Added a wrapper with a class for potential styling
+        postLinks = '<span class="row-actions"><a href="' + previewUrl + '" target="_blank">Preview</a> | <a href="' + editUrl + '" target="_blank">Edit</a></span>';
     }
+
+    switch (item.status) {
+        case 'missing':
+            statusText = 'Missing';
+            actionHtml = '<button class="button button-small action-create" data-issue-id="' + item.id + '">Create Post</button>';
+            break;
+        case 'draft_managed':
+            statusText = 'Draft (Managed)';
+            actionHtml = '<button class="button button-primary button-small action-publish" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Publish</button>' + postLinks;
+            break;
+        case 'synced_managed':
+            statusText = 'Synced (Up-to-date)';
+            actionHtml = '<div class="button-group"><button class="button button-small action-refresh" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Refresh</button> <button class="button button-small action-unlink" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Unlink</button></div>' + postLinks;
+            checkboxHtml = '<th scope="row" class="check-column"></th>';
+            break;
+        case 'synced_manual':
+            statusText = 'Synced (Protected)';
+            // Improved structure for consistency
+            actionHtml = '<div class="button-group"><span>Protected</span> <button class="button button-small action-unlink" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Unlink</button></div>' + postLinks;
+            checkboxHtml = '<th scope="row" class="check-column"></th>';
+            break;
+        case 'match_unlinked':
+            statusText = 'Match Found (Unlinked)';
+            actionHtml = '<button class="button button-primary button-small action-link" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Link Post</button>' + postLinks;
+            break;
+    }
+
+    $row.find('.status-cell .status-label').text(statusText);
+    $row.find('.actions-cell').html(actionHtml + '<span class="spinner row-spinner"></span>');
+    $row.find('.check-column').replaceWith(checkboxHtml);
+    $row.attr('class', 'status-' + item.status);
+}
     
     function renderPagination(totalItems, totalPages) {
         const $pagination = $('#pagination-controls');
@@ -193,6 +216,7 @@ jQuery(document).ready(function($) {
     });
 
     $('#status-filter, #search-filter').on('change keyup', () => { currentPage = 1; renderDisplay(); });
+    $('#sort-filter').on('change', function() {renderDisplay(); });
     $('#pagination-controls').on('click', 'a', function(e) { e.preventDefault(); const newPage = $(this).data('page'); if (newPage) { currentPage = parseInt(newPage); renderDisplay(); } });
 
     $('#firebase-sync-table-body').on('click', '.action-create, .action-link, .action-unlink, .action-publish, .action-refresh', function() {

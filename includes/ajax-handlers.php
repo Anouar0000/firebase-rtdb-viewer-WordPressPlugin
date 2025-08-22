@@ -39,7 +39,28 @@ function firebase_scanner_ajax_handler() {
                 $post_id_to_return = $normalized_post_titles[$normalized_fb_headline];
             }
         }
-        $status_list[] = ['id' => $issue['id'], 'headline' => $issue['headline'], 'status' => $status, 'post_id' => $post_id_to_return];
+        $date_formatted = 'N/A';
+        // Check if the 'title' key exists and is a string
+        if ( ! empty($issue['title']) && is_string($issue['title']) ) {
+            
+            // ** THIS IS THE NEW, MORE FLEXIBLE REGEX **
+            // \d{1,2} means "match one OR two digits"
+            if ( preg_match('/(\d{1,2})\/(\d{1,2})\/(\d{4})/', $issue['title'], $matches) ) {
+                // $matches[1] is the day (e.g., "11")
+                // $matches[2] is the month (e.g., "8")
+                // $matches[3] is the year (e.g., "2025")
+                
+                // We reformat it to YYYY/MM/DD for correct chronological sorting.
+                $date_formatted = $matches[3] . '/' . str_pad($matches[2], 2, '0', STR_PAD_LEFT) . '/' . str_pad($matches[1], 2, '0', STR_PAD_LEFT);
+            }
+        }
+        $status_list[] = [
+            'id' => $issue['id'], 
+            'headline' => $issue['headline'], 
+            'status' => $status, 
+            'post_id' => $post_id_to_return,
+            'date' => $date_formatted 
+        ];
     }
     wp_send_json_success($status_list);
 }
