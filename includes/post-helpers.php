@@ -15,92 +15,95 @@ function firebase_connector_find_post_by_firebase_id( $firebase_id ) {
     return $query->have_posts() ? $query->posts[0] : null;
 }
 
+
 function firebase_connector_generate_post_content( $issue, $issue_id ) {
-    // 1. Language-aware logic
+    // --- All your language-aware logic at the top is perfect and unchanged ---
     $options = get_option('firebase_connector_settings');
     $current_lang = $options['lang'] ?? 'en';
-
     $translation_strings = [
         'photo'  => ($current_lang === 'de') ? 'Foto' : 'Photo',
         'source' => ($current_lang === 'de') ? 'Quelle' : 'Source',
     ];
-
-    // 2. Different MailerLite form IDs based on language
     $mailerlite_form_id = ($current_lang === 'de') ? '3034691:n9b6n1' : '3345723:b6d6q7';
-
-    // 3. Different reusable block IDs based on language
     $reusable_block_1_id = ($current_lang === 'de') ? '3174' : '2224';
     $reusable_block_2_id = ($current_lang === 'de') ? '1423' : '515';
 
-
-    // Get standard issue data
+    // Get standard issue data (unchanged)
     $main_image_credit = isset( $issue['imageCredit'] ) ? esc_html( $issue['imageCredit'] ) : '';
     $teaser = isset( $issue['teaser'] ) ? wp_kses_post( $issue['teaser'] ) : '';
     
-    ob_start();
-    ?>
-    <div class="firebase-post-content-wrapper">
+    // --- START: Build the entire content as a single string ---
+    $content_html = '';
 
-        <?php if ( ! empty( $main_image_credit ) ) : ?>
-            <p class="featured-img-caption"><?php echo esc_html($translation_strings['photo']); ?>: <?php echo $main_image_credit; ?></p>
-        <?php endif; ?>
+    $content_html .= '<div class="firebase-post-content-wrapper">';
 
-        <?php if ( ! empty( $teaser ) ) : ?><p class="vorspann"><?php echo $teaser; ?></p><?php endif; ?>
+    if ( ! empty( $main_image_credit ) ) {
+        $content_html .= '<p class="featured-img-caption">' . esc_html($translation_strings['photo']) . ': ' . $main_image_credit . '</p>';
+    }
+    if ( ! empty( $teaser ) ) {
+        $content_html .= '<p class="vorspann">' . $teaser . '</p>';
+    }
+    
+    if ( ! empty( $issue['articles'] ) && is_array( $issue['articles'] ) ) {
+        $articles = $issue['articles'];
+        usort($articles, function($a, $b) { return ($a['position'] ?? 999) <=> ($b['position'] ?? 999); });
         
-        <?php if ( ! empty( $issue['articles'] ) && is_array( $issue['articles'] ) ) :
-            $articles = $issue['articles'];
-            usort($articles, function($a, $b) { return ($a['position'] ?? 999) <=> ($b['position'] ?? 999); });
+        $article_counter = 0;
+        $total_articles = count($articles);
+
+        foreach ( $articles as $article ) {
+            $article_counter++;
+            $article_url = esc_url( $article['url'] ?? '#' );
+            $article_image_url = esc_url( $article['imageUrl'] ?? '' );
+            $article_title = esc_html( $article['title'] ?? 'No Title' );
+            $article_teaser = wp_kses_post( $article['teaser'] ?? '' );
+            $article_source = esc_html( $article['source'] ?? 'Unknown Source' );
+            $article_credit = esc_html( $article['credit'] ?? '' );
+
+            // Append the HTML for one article to our main string
+            $content_html .= '<div class="wp-block-group" style="margin-bottom:30px;"><div class="wp-block-group__inner-container">';
+            $content_html .= '<div class="wp-block-columns is-layout-flex">';
             
-            $article_counter = 0;
-            $total_articles = count($articles);
+            // Image Column
+            $content_html .= '<div class="wp-block-column">';
+            $content_html .= '<a href="' . $article_url . '" target="_blank" rel="noreferrer noopener">';
+            $content_html .= '<figure class="wp-block-image size-large"><img decoding="async" loading="lazy" src="' . $article_image_url . '" class="news-teaser-img" alt="' . esc_attr($article_title) . '">';
+            if ( ! empty( $article_credit ) ) {
+                $content_html .= '<figcaption class="teaser-caption">' . esc_html($translation_strings['photo']) . ': ' . $article_credit . '</figcaption>';
+            }
+            $content_html .= '</figure></a></div>';
+            
+            // Text Column
+            $content_html .= '<div class="wp-block-column">';
+            // ** THE FIX IS HERE: `<a>` is now INSIDE `<h2>` **
+            $content_html .= '<h2 class="wp-block-heading"><a href="' . $article_url . '" target="_blank" rel="noreferrer noopener">' . $article_title . '</a></h2>';
+            $content_html .= '<p class="news-teaser">' . $article_teaser . '</p>';
+            $content_html .= '<p><a href="' . $article_url . '" target="_blank" rel="noreferrer noopener">' . esc_html($translation_strings['source']) . ': ' . $article_source . '</a></p>';
+            $content_html .= '</div>';
+            
+            $content_html .= '</div></div></div>'; // Close columns, inner-container, and group
 
-            foreach ( $articles as $article ) :
-                $article_counter++;
-                $article_url = esc_url( $article['url'] ?? '#' );
-                $article_image_url = esc_url( $article['imageUrl'] ?? '' );
-                $article_title = esc_html( $article['title'] ?? 'No Title' );
-                $article_teaser = wp_kses_post( $article['teaser'] ?? '' );
-                $article_source = esc_html( $article['source'] ?? 'Unknown Source' );
-                $article_credit = esc_html( $article['credit'] ?? '' );
-        ?>
-        <div class="wp-block-group" style="margin-bottom:30px;"><div class="wp-block-group__inner-container"><div class="wp-block-columns is-layout-flex"><div class="wp-block-column"><a href="<?php echo $article_url; ?>" target="_blank" rel="noreferrer noopener"><figure class="wp-block-image size-large"><img decoding="async" loading="lazy" src="<?php echo $article_image_url; ?>" class="news-teaser-img" alt="<?php echo esc_attr( $article_title ); ?>"><?php if ( ! empty( $article_credit ) ) : ?><figcaption class="teaser-caption"><?php echo esc_html($translation_strings['photo']); ?>: <?php echo $article_credit; ?></figcaption><?php endif; ?></figure></a></div><div class="wp-block-column"><a href="<?php echo $article_url; ?>" target="_blank" rel="noreferrer noopener"><h2 class="wp-block-heading"><?php echo $article_title; ?></h2></a><p class="news-teaser"><?php echo $article_teaser; ?></p><p><a href="<?php echo $article_url; ?>" target="_blank" rel="noreferrer noopener"><?php echo esc_html($translation_strings['source']); ?>: <?php echo $article_source; ?></a></p></div></div></div></div>
-        
-        <?php
-                // --- THIS IS THE CORRECTED LOGIC ---
-                // Insert the form if it's the 5th article OR if it's the LAST article and there are fewer than 5.
-                if ( $article_counter === 5 || $article_counter === $total_articles && $total_articles < 5 ) :
-        ?>
-        <div class="ml-form-embed nl-cta" data-account="1712162:v1f8q9v0s8" data-form="<?php echo esc_attr($mailerlite_form_id); ?>"></div>
-        <?php
-                endif;
-            endforeach;
-        else :
-            // If there are no articles at all, print the form immediately.
-        ?>
-            <div class="ml-form-embed nl-cta" data-account="1712162:v1f8q9v0s8" data-form="<?php echo esc_attr($mailerlite_form_id); ?>"></div>
-        <?php
-        endif; 
-        ?>
+            // Check if we need to insert the newsletter form
+            if ( $article_counter === 5 || ($article_counter === $total_articles && $total_articles < 5) ) {
+                $content_html .= '<div class="ml-form-embed nl-cta" data-account="1712162:v1f8q9v0s8" data-form="' . esc_attr($mailerlite_form_id) . '"></div>';
+            }
+        }
+    } else {
+        $content_html .= '<div class="ml-form-embed nl-cta" data-account="1712162:v1f8q9v0s8" data-form="' . esc_attr($mailerlite_form_id) . '"></div>';
+    }
 
-        <!-- Final static content with language-aware block IDs -->
-        <!-- wp:shortcode -->
-        [Sassy_Social_Share]
-        <!-- /wp:shortcode -->
+    // Append the final static content
+    $content_html .= '<!-- wp:group --><div class="wp-block-group"><div class="wp-block-group__inner-container">';
+    $content_html .= '<!-- wp:shortcode -->[Sassy_Social_Share]<!-- /wp:shortcode -->';
+    $content_html .= '<!-- wp:spacer {"height":"40px"} --><div style="height:40px" aria-hidden="true" class="wp-block-spacer"></div><!-- /wp:spacer -->';
+    $content_html .= '<!-- wp:block {"ref":' . absint($reusable_block_1_id) . '} /-->';
+    $content_html .= '<!-- wp:spacer {"height":"40px"} --><div style="height:40px" aria-hidden="true" class="wp-block-spacer"></div><!-- /wp:spacer -->';
+    $content_html .= '<!-- wp:block {"ref":' . absint($reusable_block_2_id) . '} /-->';
+    $content_html .= '</div></div><!-- /wp:group -->';
 
-        <!-- wp:spacer {"height":"40px"} -->
-        <div style="height:40px" aria-hidden="true" class="wp-block-spacer"></div>
-        <!-- /wp:spacer -->
+    $content_html .= '</div>'; // Close the main wrapper
 
-        <!-- wp:block {"ref":<?php echo absint($reusable_block_1_id); ?>} /-->
-
-        <!-- wp:spacer {"height":"40px"} -->
-        <div style="height:40px" aria-hidden="true" class="wp-block-spacer"></div>
-        <!-- /wp:spacer -->
-
-        <!-- wp:block {"ref":<?php echo absint($reusable_block_2_id); ?>} /-->
-    </div>
-    <?php
-    return ob_get_clean();
+    return $content_html;
 }
 
 
