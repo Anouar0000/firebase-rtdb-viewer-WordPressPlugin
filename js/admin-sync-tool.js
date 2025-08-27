@@ -132,12 +132,21 @@ function renderSingleRow($row, item) {
     
     let postLinks = '';
     if (item.post_id) {
-        const editUrl = `/wp-admin/post.php?post=${item.post_id}&action=edit`;
-        const previewUrl = `/?p=${item.post_id}&preview=true`;
-        // Added a wrapper with a class for potential styling
+        // The edit URL is always relative to the admin area, so it's simple.
+        const editUrl = `post.php?post=${item.post_id}&action=edit`;
+        
+        // Start with the base preview URL.
+        let previewUrl = `/?p=${item.post_id}&preview=true`;
+        
+        // Check the language passed from PHP.
+        if (firebase_sync_data.current_lang === 'de') {
+            // If it's German, prepend the /de/ subdirectory.
+            previewUrl = `/de${previewUrl}`;
+        }
+        
         postLinks = '<span class="row-actions"><a href="' + previewUrl + '" target="_blank">Preview</a> | <a href="' + editUrl + '" target="_blank">Edit</a></span>';
     }
-
+    
     switch (item.status) {
         case 'missing':
             statusText = 'Missing';

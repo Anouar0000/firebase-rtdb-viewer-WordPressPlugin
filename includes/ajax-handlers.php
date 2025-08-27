@@ -44,11 +44,7 @@ function firebase_scanner_ajax_handler() {
         if ( ! empty($issue['title']) && is_string($issue['title']) ) {
             
             // ** THIS IS THE NEW, MORE FLEXIBLE REGEX **
-            // \d{1,2} means "match one OR two digits"
-            if ( preg_match('/(\d{1,2})\/(\d{1,2})\/(\d{4})/', $issue['title'], $matches) ) {
-                // $matches[1] is the day (e.g., "11")
-                // $matches[2] is the month (e.g., "8")
-                // $matches[3] is the year (e.g., "2025")
+            if ( preg_match('/(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})/', $issue['title'], $matches) ) {
                 
                 // We reformat it to YYYY/MM/DD for correct chronological sorting.
                 $date_formatted = $matches[3] . '/' . str_pad($matches[2], 2, '0', STR_PAD_LEFT) . '/' . str_pad($matches[1], 2, '0', STR_PAD_LEFT);

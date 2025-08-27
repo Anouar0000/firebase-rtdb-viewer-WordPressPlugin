@@ -134,6 +134,12 @@ function firebase_connector_tools_page_html() {
     $ongoing_sync_limit = $options['ongoing_sync_limit'] ?? 50;
     ?>
     <style>
+        /* ** ADD THIS NEW BLOCK ** */
+        .actions-cell .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px; /* Adds a small space between the buttons */
+        }
         .firebase-controls { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; margin-bottom: 20px;}
         #sync-tool-filters { display: flex; align-items: center; gap: 10px; }
         .tablenav-pages .current-page { background: #f0f0f1; border: 1px solid #dcdcde; }
@@ -259,10 +265,15 @@ function firebase_connector_tools_page_html() {
 function firebase_connector_enqueue_admin_scripts($hook_suffix) {
     if ( 'firebase-connector-tools' !== $hook_suffix && 'toplevel_page_firebase-connector-tools' !== $hook_suffix ) return;
     wp_enqueue_script('firebase-connector-sync-tool', plugin_dir_url(__FILE__) . '../js/admin-sync-tool.js', ['jquery'], '1.0.3', true);
+    
+    $options = get_option('firebase_connector_settings');
+    $current_lang = $options['lang'] ?? 'en';
+    
     wp_localize_script('firebase-connector-sync-tool', 'firebase_sync_data', [
         'ajax_url' => admin_url('admin-ajax.php'),
         'nonce'    => wp_create_nonce('firebase_sync_nonce'),
-        'quick_sync_nonce' => wp_create_nonce('firebase_quick_sync_nonce')
+        'quick_sync_nonce' => wp_create_nonce('firebase_quick_sync_nonce'),
+        'current_lang' => $current_lang
     ]);
 }
 add_action('admin_enqueue_scripts', 'firebase_connector_enqueue_admin_scripts');
