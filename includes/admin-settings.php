@@ -7,9 +7,9 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  * 1. ADMIN MENU SETUP (Reordered)
  */
 function firebase_connector_add_admin_menu() {
-    add_menu_page('Firebase Tools', 'Firebase Connector', 'manage_options', 'firebase-connector-tools', 'firebase_connector_tools_page_html', 'dashicons-cloud', 30);
-    add_submenu_page('firebase-connector-tools', 'Sync Tools', 'Tools', 'manage_options', 'firebase-connector-tools', 'firebase_connector_tools_page_html');
-    add_submenu_page('firebase-connector-tools', 'Firebase Settings', 'Settings', 'manage_options', 'firebase-connector-settings', 'firebase_connector_settings_page_html');
+    add_menu_page('Firebase Tools', 'Firebase Connector', 'edit_others_posts', 'firebase-connector-tools', 'firebase_connector_tools_page_html', 'dashicons-cloud', 30);
+    add_submenu_page('firebase-connector-tools', 'Sync Tools', 'Tools', 'edit_others_posts', 'firebase-connector-tools', 'firebase_connector_tools_page_html');
+    add_submenu_page('firebase-connector-tools', 'Firebase Settings', 'Settings', 'edit_others_posts', 'firebase-connector-settings', 'firebase_connector_settings_page_html');
 }
 add_action( 'admin_menu', 'firebase_connector_add_admin_menu' );
 
@@ -128,7 +128,7 @@ function firebase_connector_settings_page_html() {
 }
 
 function firebase_connector_tools_page_html() {
-    if ( ! current_user_can('manage_options') ) return;
+    if ( ! current_user_can('edit_others_posts') ) return;
     $options = get_option('firebase_connector_settings');
     $admin_limit = $options['admin_limit'] ?? 200;
     $ongoing_sync_limit = $options['ongoing_sync_limit'] ?? 50;
