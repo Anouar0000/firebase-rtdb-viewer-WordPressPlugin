@@ -30,7 +30,18 @@ function firebase_connector_generate_post_content( $issue, $issue_id ) {
 
     // Get standard issue data (unchanged)
     $main_image_credit = isset( $issue['imageCredit'] ) ? esc_html( $issue['imageCredit'] ) : '';
-    $teaser = isset( $issue['teaser'] ) ? wp_kses_post( $issue['teaser'] ) : '';
+    // 1. Get the RAW teaser text first.
+    $teaser = isset( $issue['teaser'] ) ? $issue['teaser'] : '';
+
+    // 2. Perform the replacement on the RAW text.
+    $teaser = str_replace(
+        'Unsere neue Ausgabe ist da',
+        'Hier kommt der lösungsorientierte Nachrichten-Überblick, zusammengestellt von unserem Partner Squirrel News.',
+        $teaser
+    );
+
+    // 3. NOW, sanitize the final, potentially modified string for safe output.
+    $teaser = wp_kses_post( $teaser );
     
     // --- START: Build the entire content as a single string ---
     $content_html = '';
