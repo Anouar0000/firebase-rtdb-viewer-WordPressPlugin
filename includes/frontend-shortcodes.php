@@ -14,7 +14,7 @@ function firebase_connector_enqueue_styles() {
             'firebase-connector-styles',
             plugin_dir_url( __FILE__ ) . 'frontend-shortcodes.css',
             [],
-            '1.2.5' // Increment version
+            '1.2.6' // Increment version
         );
         
         // ** ADDITION: Enqueue the JavaScript for infinite scroll **
@@ -22,7 +22,7 @@ function firebase_connector_enqueue_styles() {
             'firebase-connector-loader',
             plugin_dir_url( __FILE__ ) . '../js/frontend-loader.js',
             ['jquery'],
-            '1.1.0',
+            '1.1.1',
             true // Load in footer
         );
         
@@ -39,7 +39,7 @@ function firebase_connector_enqueue_styles() {
             'firebase-connector-styles',
             plugin_dir_url( __FILE__ ) . 'frontend-shortcodes.css',
             [],
-            '1.2.5'
+            '1.2.6'
         );
     }
 }

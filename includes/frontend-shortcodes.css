@@ -1,63 +1,215 @@
-/* ===================================================================
-   SECTION 1: Issues List Grid (on the main news page)
-   =================================================================== */
-.fc-issues-title { font-size: 36px; font-weight: 700; margin-bottom: 40px; color: #000; }
-.wpcap-grid-container { display: grid; grid-template-columns: repeat(2, 1fr); grid-gap: 30px; }
-.wpcap-post .post-grid-thumbnail img { width: 100%; height: auto; display: block; }
-.wpcap-post .post-grid-text-wrap { padding: 15px 5px 5px; text-align: left; }
-.wpcap-post h3.title { margin: 0; font-size: 24px; font-weight: bold; line-height: 1.3; }
-.wpcap-post h3.title a { text-decoration: none; color: #000000; }
+/* /includes/frontend-shortcodes.css */
 
 /* ===================================================================
-   SECTION 2: Single Post Layout (for individual issue posts)
+   SECTION 1: Issues List Grid
    =================================================================== */
-.firebase-post-content-wrapper .featured-img-caption { font-size: 12px; color: #666; margin-top: 1em; text-align: right; }
-.firebase-post-content-wrapper .vorspann { font-size: 19px; font-weight: bold; margin-bottom: 40px; }
-.firebase-post-content-wrapper .teaser-caption { margin-top: -2.2em !important; margin-left: 1em; font-size: 12px; color: #EEEEEE; }
-.firebase-post-content-wrapper .news-teaser { margin-top: -5px !important; margin-bottom: 15px !important; }
 
-/* --- THE DEFINITIVE FIX for Layout, Gaps, and Image Height --- */
-
-/* This is the master selector. It targets any columns block inside our plugin's content. */
-.single-post .firebase-post-content-wrapper .wp-block-columns {
-    display: flex;
-    flex-wrap: wrap; /* Default to stacking on mobile */
-    gap: 15px; /* Smaller gap for mobile */
+.fc-issues-title {
+    font-size: 36px;
+    font-weight: 700;
+    margin-bottom: 40px;
+    color: #000;
 }
 
-/* On desktop screens (and larger), apply the specific layout */
+.wpcap-grid-container {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-gap: 30px;
+}
+
+.wpcap-post .post-grid-thumbnail img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.wpcap-post .post-grid-text-wrap {
+    padding: 15px 5px 5px;
+    text-align: left;
+}
+
+.wpcap-post h3.title {
+    margin: 0;
+    font-size: 24px;
+    font-weight: bold;
+    line-height: 1.3;
+}
+
+.wpcap-post h3.title a {
+    text-decoration: none;
+    color: #000000;
+}
+
+
+/* ===================================================================
+   SECTION 2: Single Post Layout
+   =================================================================== */
+
+.firebase-post-content-wrapper .featured-img-caption {
+    font-size: 12px;
+    color: #666;
+    margin-top: 1em;
+    text-align: right;
+}
+
+.firebase-post-content-wrapper .vorspann {
+    font-size: 19px;
+    font-weight: bold;
+    margin-bottom: 40px;
+}
+
+.firebase-post-content-wrapper .teaser-caption {
+    margin-top: -2.2em !important;
+    margin-left: 1em;
+    font-size: 12px;
+    color: #eeeeee;
+}
+
+.firebase-post-content-wrapper .news-teaser {
+    margin-top: -5px !important;
+    margin-bottom: 15px !important;
+}
+
+.firebase-post-content-wrapper img {
+    max-width: 100%;
+    height: auto;
+}
+
+
+/* ===================================================================
+   SECTION 3: Mobile-first Post Layout
+   =================================================================== */
+
+.single-post .firebase-post-content-wrapper .wp-block-columns {
+    display: flex;
+    flex-wrap: wrap !important;
+    gap: 15px !important;
+}
+
+.single-post .firebase-post-content-wrapper .wp-block-columns > .wp-block-column {
+    flex-basis: 100% !important;
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+
+/* ===================================================================
+   SECTION 4: Desktop Layout
+   =================================================================== */
+
 @media screen and (min-width: 782px) {
     .single-post .firebase-post-content-wrapper .wp-block-columns {
+        display: flex !important;
+        flex-direction: row !important;
         flex-wrap: nowrap !important;
-        gap: 25px !important; /* Larger gap for desktop */
+        gap: 25px !important;
+        align-items: flex-start;
     }
 
-    /* Apply the 35/65 split on desktop */
     .single-post .firebase-post-content-wrapper .wp-block-columns > .wp-block-column:first-child {
         flex-basis: 35% !important;
-    }
-    .single-post .firebase-post-content-wrapper .wp-block-columns > .wp-block-column:nth-child(2) {
-        flex-basis: 65% !important;
+        width: 35% !important;
+        max-width: 35% !important;
     }
 
-    /* Set the fixed image height ONLY on desktop */
+    .single-post .firebase-post-content-wrapper .wp-block-columns > .wp-block-column:nth-child(2) {
+        flex-basis: 65% !important;
+        width: 65% !important;
+        max-width: 65% !important;
+    }
+
     .firebase-post-content-wrapper .news-teaser-img {
         height: 175px;
         width: 100%;
         object-fit: cover;
+        display: block;
     }
 }
 
+
 /* ===================================================================
-   SECTION 3: Responsive Rules (Grid Only)
+   SECTION 5: Responsive Grid + Mobile Text Styling
    =================================================================== */
-@media (max-width: 768px) {
+
+@media screen and (max-width: 781px) {
     .wpcap-grid-container {
         grid-template-columns: 1fr;
     }
+
+    .fc-issues-title {
+        font-size: 30px;
+        margin-bottom: 25px;
+    }
+
+    .wpcap-post h3.title {
+        font-size: 22px;
+    }
+
+    .firebase-post-content-wrapper .vorspann {
+        font-size: 18px;
+        margin-bottom: 25px;
+    }
+
+    .firebase-post-content-wrapper .teaser-caption {
+        margin-top: 0 !important;
+        margin-left: 0 !important;
+        color: #666;
+        font-size: 12px;
+    }
 }
 
+
 /* ===================================================================
-   SECTION 4: Utility Styles
+   SECTION 6: Mobile Fix for Gutenberg Inline Column Widths
    =================================================================== */
-.fc-error-message{color:#d8000c;background-color:#ffd2d2;border:1px solid #d8000c;padding:15px;border-radius:5px}
+
+@media screen and (max-width: 781px) {
+    body.single-post .entry-content .firebase-post-content-wrapper .wp-block-columns {
+        display: flex !important;
+        flex-direction: column !important;
+        flex-wrap: nowrap !important;
+        gap: 20px !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+
+    body.single-post .entry-content .firebase-post-content-wrapper .wp-block-columns > .wp-block-column {
+        flex-basis: 100% !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        flex-grow: 0 !important;
+        flex-shrink: 0 !important;
+    }
+
+    body.single-post .entry-content .firebase-post-content-wrapper .wp-block-column[style] {
+        flex-basis: 100% !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    body.single-post .entry-content .firebase-post-content-wrapper .news-teaser-img {
+        width: 100% !important;
+        height: auto !important;
+        object-fit: contain !important;
+        display: block;
+    }
+
+    body.single-post .entry-content .firebase-post-content-wrapper .news-teaser {
+        margin-top: 0 !important;
+        margin-bottom: 20px !important;
+        padding-bottom: 0 !important;
+    }
+}
+
+
+/* ===================================================================
+   SECTION 7: Utility Styles
+   =================================================================== */
+
+.fc-error-message {
+    color: #d8000c;
+    background-color: #ffd2d2;
+    border: 1px solid #d8000c;
+    padding: 15px;
+    border-radius: 5px;
+}
