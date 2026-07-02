@@ -140,8 +140,12 @@ function firebase_connector_tools_page_html() {
         <p>Use this tool for detailed management and bulk actions.</p>
         <div class="firebase-controls">
             <button id="scan-firebase-issues" class="button button-primary">Scan All Issues</button>
+            <label for="scan-date-from">From</label>
+            <input type="date" id="scan-date-from">
+            <label for="scan-date-to">To</label>
+            <input type="date" id="scan-date-to">
             <p class="description">
-                (Scans the latest <strong><?php echo esc_html($admin_limit); ?></strong> issues. <a href="<?php echo admin_url('admin.php?page=firebase-connector-settings'); ?>">Change</a>)
+                (Scans up to <strong><?php echo esc_html($admin_limit); ?></strong> issues. <a href="<?php echo admin_url('admin.php?page=firebase-connector-settings'); ?>">Change</a>)
             </p>
             <span class="spinner" style="float: none; margin-top: 4px;"></span>
         </div>

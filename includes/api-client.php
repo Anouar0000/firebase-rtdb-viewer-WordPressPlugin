@@ -68,7 +68,7 @@ function firebase_issues_fetcher_get_issues( $limit, $lang ) {
     return $issues;
 }
 
-function firebase_issues_fetcher_get_issues_page( $limit, $lang, $page_token = '' ) {
+function firebase_issues_fetcher_get_issues_page( $limit, $lang, $page_token = '', $date_from = '', $date_to = '' ) {
     $options = get_option( 'firebase_connector_settings' );
     $api_token = $options['api_token'] ?? '';
 
@@ -83,6 +83,12 @@ function firebase_issues_fetcher_get_issues_page( $limit, $lang, $page_token = '
     );
     if ( ! empty( $page_token ) ) {
         $query_params['pageToken'] = $page_token;
+    }
+    if ( ! empty( $date_from ) ) {
+        $query_params['dateFrom'] = $date_from;
+    }
+    if ( ! empty( $date_to ) ) {
+        $query_params['dateTo'] = $date_to;
     }
 
     $request_url = add_query_arg( $query_params, FIREBASE_CONNECTOR_ISSUES_LIST_URL );

@@ -206,6 +206,14 @@ function renderSingleRow($row, item) {
         const $spinner = $button.siblings('.spinner');
         const adminLimit = parseInt(firebase_sync_data.admin_limit, 10) || 200;
         const scanPageSize = parseInt(firebase_sync_data.scan_page_size, 10) || 50;
+        const dateFrom = $('#scan-date-from').val() || '';
+        const dateTo = $('#scan-date-to').val() || '';
+
+        if (dateFrom && dateTo && dateFrom > dateTo) {
+            $('#firebase-sync-table-body').html('<tr><td colspan="5">Start date must be before end date.</td></tr>');
+            $('.wp-list-table').show();
+            return;
+        }
 
         allIssuesData = [];
         currentPage = 1;
@@ -226,7 +234,9 @@ function renderSingleRow($row, item) {
                 action: 'firebase_scan_issues',
                 nonce: firebase_sync_data.nonce,
                 page_token: pageToken || '',
-                scan_limit: Math.min(scanPageSize, remaining)
+                scan_limit: Math.min(scanPageSize, remaining),
+                date_from: dateFrom,
+                date_to: dateTo
             }).done(response => {
                 if (!response.success) {
                     $('#firebase-sync-table-body').html('<tr><td colspan="5">Error: ' + response.data + '</td></tr>');

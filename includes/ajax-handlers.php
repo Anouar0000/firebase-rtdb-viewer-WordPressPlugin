@@ -8,10 +8,22 @@ function firebase_scanner_ajax_handler() {
     $admin_limit = absint($options['admin_limit'] ?? 200);
     $lang = $options['lang'] ?? 'en';
     $page_token = sanitize_text_field($_POST['page_token'] ?? '');
+    $date_from = sanitize_text_field($_POST['date_from'] ?? '');
+    $date_to = sanitize_text_field($_POST['date_to'] ?? '');
     $requested_limit = absint($_POST['scan_limit'] ?? 50);
     $scan_limit = max(1, min($requested_limit, $admin_limit, 100));
 
-    $issues_page = firebase_issues_fetcher_get_issues_page($scan_limit, $lang, $page_token);
+    if ($date_from !== '' && !preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $date_from)) {
+        wp_send_json_error('Invalid start date.');
+    }
+    if ($date_to !== '' && !preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $date_to)) {
+        wp_send_json_error('Invalid end date.');
+    }
+    if ($date_from !== '' && $date_to !== '' && $date_from > $date_to) {
+        wp_send_json_error('Start date must be before end date.');
+    }
+
+    $issues_page = firebase_issues_fetcher_get_issues_page($scan_limit, $lang, $page_token, $date_from, $date_to);
     if (is_wp_error($issues_page)) { wp_send_json_error('Failed to fetch issues.'); }
 
     $issues = $issues_page['items'] ?? [];
