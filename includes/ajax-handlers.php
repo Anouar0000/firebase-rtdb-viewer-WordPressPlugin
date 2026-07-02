@@ -5,11 +5,16 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 function firebase_scanner_ajax_handler() {
     check_ajax_referer('firebase_sync_nonce', 'nonce');
     $options = get_option('firebase_connector_settings');
-    $admin_limit = $options['admin_limit'] ?? 200;
+    $admin_limit = absint($options['admin_limit'] ?? 200);
     $lang = $options['lang'] ?? 'en';
-    $issues = firebase_issues_fetcher_get_issues($admin_limit, $lang);
-    if (is_wp_error($issues)) { wp_send_json_error('Failed to fetch issues.'); }
+    $page_token = sanitize_text_field($_POST['page_token'] ?? '');
+    $requested_limit = absint($_POST['scan_limit'] ?? 50);
+    $scan_limit = max(1, min($requested_limit, $admin_limit, 100));
 
+    $issues_page = firebase_issues_fetcher_get_issues_page($scan_limit, $lang, $page_token);
+    if (is_wp_error($issues_page)) { wp_send_json_error('Failed to fetch issues.'); }
+
+    $issues = $issues_page['items'] ?? [];
     $firebase_issue_ids = [];
     foreach ($issues as $issue) {
         if (is_array($issue) && !empty($issue['id'])) {
@@ -48,25 +53,24 @@ function firebase_scanner_ajax_handler() {
             }
         }
         $date_formatted = 'N/A';
-        // Check if the 'title' key exists and is a string
         if ( ! empty($issue['title']) && is_string($issue['title']) ) {
-            
-            // ** THIS IS THE NEW, MORE FLEXIBLE REGEX **
-            if ( preg_match('/(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})/', $issue['title'], $matches) ) {
-                
-                // We reformat it to YYYY/MM/DD for correct chronological sorting.
+            if ( preg_match('/(\d{1,2})[\/.](\d{1,2})[\.\/](\d{4})/', $issue['title'], $matches) ) {
                 $date_formatted = $matches[3] . '/' . str_pad($matches[2], 2, '0', STR_PAD_LEFT) . '/' . str_pad($matches[1], 2, '0', STR_PAD_LEFT);
             }
         }
         $status_list[] = [
-            'id' => $issue['id'], 
-            'headline' => $issue['headline'], 
-            'status' => $status, 
+            'id' => $issue['id'],
+            'headline' => $issue['headline'],
+            'status' => $status,
             'post_id' => $post_id_to_return,
-            'date' => $date_formatted 
+            'date' => $date_formatted
         ];
     }
-    wp_send_json_success($status_list);
+    wp_send_json_success([
+        'items' => $status_list,
+        'next_page_token' => $issues_page['next_page_token'] ?? '',
+        'has_more' => !empty($issues_page['has_more']),
+    ]);
 }
 add_action('wp_ajax_firebase_scan_issues', 'firebase_scanner_ajax_handler');
 

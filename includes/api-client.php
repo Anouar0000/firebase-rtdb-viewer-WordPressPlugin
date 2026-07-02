@@ -68,6 +68,70 @@ function firebase_issues_fetcher_get_issues( $limit, $lang ) {
     return $issues;
 }
 
+function firebase_issues_fetcher_get_issues_page( $limit, $lang, $page_token = '' ) {
+    $options = get_option( 'firebase_connector_settings' );
+    $api_token = $options['api_token'] ?? '';
+
+    if ( empty( $api_token ) ) {
+        return new WP_Error( 'firebase_config_missing', 'Firebase API Token is not configured.' );
+    }
+
+    $query_params = array(
+        'lang'  => $lang,
+        'limit' => $limit,
+        'paged' => 1,
+    );
+    if ( ! empty( $page_token ) ) {
+        $query_params['pageToken'] = $page_token;
+    }
+
+    $request_url = add_query_arg( $query_params, FIREBASE_CONNECTOR_ISSUES_LIST_URL );
+    $response = wp_remote_get( $request_url, array(
+        'headers' => array(
+            'token' => $api_token,
+        ),
+        'timeout' => 15,
+    ) );
+
+    if ( is_wp_error( $response ) ) {
+        error_log( 'Firebase paged issues fetcher WP_Error: ' . $response->get_error_message() );
+        return $response;
+    }
+
+    $body = wp_remote_retrieve_body( $response );
+    $status_code = wp_remote_retrieve_response_code( $response );
+
+    if ( $status_code !== 200 ) {
+        error_log( 'Firebase paged issues fetcher HTTP error: Status ' . $status_code . ' Body: ' . $body );
+        return new WP_Error( 'firebase_http_error', 'Failed to fetch paged issues from Firebase. HTTP Status: ' . $status_code );
+    }
+
+    $payload = json_decode( $body, true );
+    if ( json_last_error() !== JSON_ERROR_NONE ) {
+        error_log( 'Firebase paged issues fetcher JSON decode error: ' . json_last_error_msg() . ' Body: ' . $body );
+        return new WP_Error( 'firebase_json_error', 'Invalid JSON response from Firebase Cloud Function.' );
+    }
+
+    if ( isset( $payload['items'] ) && is_array( $payload['items'] ) ) {
+        return array(
+            'items'           => $payload['items'],
+            'next_page_token' => $payload['nextPageToken'] ?? '',
+            'has_more'        => ! empty( $payload['hasMore'] ),
+        );
+    }
+
+    if ( is_array( $payload ) ) {
+        return array(
+            'items'           => $payload,
+            'next_page_token' => '',
+            'has_more'        => false,
+        );
+    }
+
+    return new WP_Error( 'firebase_data_format_error', 'Unexpected paged issue data format received from Firebase.' );
+}
+
+
 
 /**
  * Generates the URL for a single issue page.

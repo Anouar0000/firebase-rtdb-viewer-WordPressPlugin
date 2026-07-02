@@ -204,24 +204,64 @@ function renderSingleRow($row, item) {
     $('#scan-firebase-issues').on('click', function() {
         const $button = $(this);
         const $spinner = $button.siblings('.spinner');
+        const adminLimit = parseInt(firebase_sync_data.admin_limit, 10) || 200;
+        const scanPageSize = parseInt(firebase_sync_data.scan_page_size, 10) || 50;
+
+        allIssuesData = [];
+        currentPage = 1;
         $button.prop('disabled', true);
         $spinner.addClass('is-active');
-        $('#firebase-sync-table-body').html('<tr><td colspan="4">Scanning...</td></tr>');
+        $('#firebase-sync-table-body').html('<tr><td colspan="5">Scanning 0/' + adminLimit + '...</td></tr>');
         $('.wp-list-table, #pagination-controls').show();
-        $.post(firebase_sync_data.ajax_url, { action: 'firebase_scan_issues', nonce: firebase_sync_data.nonce })
-            .done(response => {
-                if (response.success) {
-                    console.log('Data received from server:', response);
-                    allIssuesData = response.data;
-                    currentPage = 1;
-                    renderDisplay();
-                    $('#sync-tool-filters, #sync-tool-actions, .tablenav.bottom').show();
-                } else {
-                    $('#firebase-sync-table-body').html('<tr><td colspan="4">Error: ' + response.data + '</td></tr>');
+        $('#sync-tool-filters, #sync-tool-actions, .tablenav.bottom').hide();
+
+        function scanNextPage(pageToken) {
+            const remaining = Math.max(0, adminLimit - allIssuesData.length);
+            if (remaining === 0) {
+                finishScan();
+                return;
+            }
+
+            $.post(firebase_sync_data.ajax_url, {
+                action: 'firebase_scan_issues',
+                nonce: firebase_sync_data.nonce,
+                page_token: pageToken || '',
+                scan_limit: Math.min(scanPageSize, remaining)
+            }).done(response => {
+                if (!response.success) {
+                    $('#firebase-sync-table-body').html('<tr><td colspan="5">Error: ' + response.data + '</td></tr>');
+                    finishScan();
+                    return;
                 }
-            })
-            .fail(() => $('#firebase-sync-table-body').html('<tr><td colspan="4">Server error.</td></tr>'))
-            .always(() => { $spinner.removeClass('is-active'); $button.prop('disabled', false); });
+
+                const items = response.data.items || [];
+                allIssuesData = allIssuesData.concat(items);
+                renderDisplay();
+                $('#sync-tool-filters, #sync-tool-actions, .tablenav.bottom').show();
+
+                const loaded = allIssuesData.length;
+                $button.text('Scanning ' + loaded + '/' + adminLimit + '...');
+
+                if (response.data.has_more && response.data.next_page_token && loaded < adminLimit) {
+                    scanNextPage(response.data.next_page_token);
+                } else {
+                    finishScan();
+                }
+            }).fail(() => {
+                $('#firebase-sync-table-body').html('<tr><td colspan="5">Server error.</td></tr>');
+                finishScan();
+            });
+        }
+
+        function finishScan() {
+            $spinner.removeClass('is-active');
+            $button.prop('disabled', false).text('Scan All Issues');
+            if (allIssuesData.length === 0) {
+                renderDisplay();
+            }
+        }
+
+        scanNextPage('');
     });
 
     $('#status-filter, #search-filter').on('change keyup', () => { currentPage = 1; renderDisplay(); });

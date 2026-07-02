@@ -246,7 +246,9 @@ function firebase_connector_enqueue_admin_scripts($hook_suffix) {
         'ajax_url' => admin_url('admin-ajax.php'),
         'nonce'    => wp_create_nonce('firebase_sync_nonce'),
         'quick_sync_nonce' => wp_create_nonce('firebase_quick_sync_nonce'),
-        'current_lang' => $current_lang
+        'current_lang' => $current_lang,
+        'admin_limit' => absint($options['admin_limit'] ?? 200),
+        'scan_page_size' => 50
     ]);
 }
 add_action('admin_enqueue_scripts', 'firebase_connector_enqueue_admin_scripts');
