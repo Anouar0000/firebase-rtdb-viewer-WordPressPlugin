@@ -17,7 +17,7 @@ function firebase_connector_find_post_by_firebase_id( $firebase_id ) {
 
 
 function firebase_connector_generate_post_content( $issue, $issue_id ) {
-    // --- All language-aware and teaser logic is correct and unchanged ---
+    // --- All your language-aware logic at the top is perfect and unchanged ---
     $options = get_option('firebase_connector_settings');
     $current_lang = $options['lang'] ?? 'en';
     $translation_strings = [
@@ -28,19 +28,18 @@ function firebase_connector_generate_post_content( $issue, $issue_id ) {
     $reusable_block_1_id = ($current_lang === 'de') ? '3174' : '2224';
     $reusable_block_2_id = ($current_lang === 'de') ? '1423' : '515';
 
+    // Get standard issue data (unchanged)
     $main_image_credit = isset( $issue['imageCredit'] ) ? esc_html( $issue['imageCredit'] ) : '';
-    $teaser = isset( $issue['teaser'] ) ? $issue['teaser'] : '';
-    if ($current_lang === 'de') {
-        $teaser = str_replace('...', '...', $teaser); // Your replacement logic
-    }
-    $teaser = wp_kses_post( $teaser );
+    $teaser = isset( $issue['teaser'] ) ? wp_kses_post( $issue['teaser'] ) : '';
     
-    // Start building the entire content as a single, unbroken string.
+    // --- START: Build the entire content as a single string ---
     $content_html = '';
+
     $content_html .= '<div class="firebase-post-content-wrapper">';
 
-    if ( ! empty( $main_image_credit ) ) { $content_html .= '<p class="featured-img-caption">' . esc_html($translation_strings['photo']) . ': ' . $main_image_credit . '</p>'; }
-    if ( ! empty( $teaser ) ) { $content_html .= '<p class="vorspann">' . $teaser . '</p>'; }
+    if ( ! empty( $teaser ) ) {
+        $content_html .= '<p class="vorspann">' . $teaser . '</p>';
+    }
     
     if ( ! empty( $issue['articles'] ) && is_array( $issue['articles'] ) ) {
         $articles = $issue['articles'];
@@ -58,30 +57,49 @@ function firebase_connector_generate_post_content( $issue, $issue_id ) {
             $article_source = esc_html( $article['source'] ?? 'Unknown Source' );
             $article_credit = esc_html( $article['credit'] ?? '' );
 
-            // This is the clean HTML structure. It does NOT have block comments for the inner columns.
-            $content_html .= '<!-- wp:group {"style":{"spacing":{"margin":{"bottom":"30px"}}}} --><div class="wp-block-group" style="margin-bottom:30px;"><div class="wp-block-group__inner-container">';
-            $content_html .= '<div class="wp-block-columns is-layout-flex">'; // No custom class needed here
-            $content_html .= '<div class="wp-block-column">';
-            $content_html .= '<a href="' . $article_url . '"><figure class="wp-block-image size-large"><img loading="lazy" src="' . $article_image_url . '" class="news-teaser-img" alt="' . esc_attr($article_title) . '">';
-            if ( ! empty( $article_credit ) ) { $content_html .= '<figcaption class="teaser-caption">' . esc_html($translation_strings['photo']) . ': ' . $article_credit . '</figcaption>'; }
-            $content_html .= '</figure></a></div>';
-            $content_html .= '<div class="wp-block-column">';
-            $content_html .= '<h2 class="wp-block-heading"><a href="' . $article_url . '">' . $article_title . '</a></h2>';
-            $content_html .= '<p class="news-teaser">' . $article_teaser . '</p>';
-            $content_html .= '<p><a href="' . $article_url . '">' . esc_html($translation_strings['source']) . ': ' . $article_source . '</a></p>';
-            $content_html .= '</div>';
-            $content_html .= '</div>'; // End wp-block-columns
-            $content_html .= '</div></div><!-- /wp:group -->';
-
-            if ( $article_counter === 5 || ($article_counter === $total_articles && $total_articles < 5) ) {
-                $content_html .= '<div class="ml-form-embed nl-cta" data-account="1712162:v1f8q9v0s8" data-form="' . esc_attr($mailerlite_form_id) . '"></div>';
+            // Append the HTML for one article to our main string
+            $content_html .= '<div class="wp-block-group" style="margin-bottom:30px;"><div class="wp-block-group__inner-container">';
+            $content_html .= '<div class="wp-block-columns is-layout-flex">';
+            
+            // Image Column
+            $content_html .= '<div class="wp-block-column is-layout-flow wp-block-column-is-layout-flow" style="flex-basis:33.33%">';
+            $content_html .= '<a href="' . $article_url . '" target="_blank" rel="noreferrer noopener">';
+            $content_html .= '<figure class="wp-block-image size-large"><img decoding="async" loading="lazy" src="' . $article_image_url . '" class="news-teaser-img" alt="' . esc_attr($article_title) . '">';
+            if ( ! empty( $article_credit ) ) {
+                $content_html .= '<figcaption class="teaser-caption">' . esc_html($translation_strings['photo']) . ': ' . $article_credit . '</figcaption>';
             }
+            $content_html .= '</figure></a></div>';
+            
+            // Text Column
+            $content_html .= '<div class="wp-block-column is-layout-flow wp-block-column-is-layout-flow" style="flex-basis:66.66%">';
+            // ** THE FIX IS HERE: `<a>` is now INSIDE `<h2>` **
+            $content_html .= '<h2 class="wp-block-heading"><a href="' . $article_url . '" target="_blank" rel="noreferrer noopener">' . $article_title . '</a></h2>';
+            $content_html .= '<p class="news-teaser">' . $article_teaser . '</p>';
+            $content_html .= '<p><a href="' . $article_url . '" target="_blank" rel="noreferrer noopener">' . esc_html($translation_strings['source']) . ': ' . $article_source . '</a></p>';
+            $content_html .= '</div>';
+            
+            $content_html .= '</div></div></div>'; // Close columns, inner-container, and group
+
+            // Check if we need to insert the newsletter form
+            //if ( $article_counter === 5 || ($article_counter === $total_articles && $total_articles < 5) ) {
+            //    $content_html .= '<div class="ml-form-embed nl-cta" data-account="1712162:v1f8q9v0s8" data-form="' . esc_attr($mailerlite_form_id) . '"></div>';
+            //}
         }
     } else {
-        $content_html .= '<div class="ml-form-embed nl-cta" data-account="1712162:v1f8q9v0s8" data-form="' . esc_attr($mailerlite_form_id) . '"></div>';
+        //$content_html .= '<div class="ml-form-embed nl-cta" data-account="1712162:v1f8q9v0s8" data-form="' . esc_attr($mailerlite_form_id) . '"></div>';
     }
 
-    // ** RESTORED: The recommendation block **
+    // Append the final static content    
+    // START KATJA GOOD NEWS
+
+    if ( ! empty( $main_image_credit ) ) {
+        $content_html .= '<!-- wp:paragraph --><p>' . esc_html($translation_strings['photo']) . ': ' . $main_image_credit . '</p><!-- /wp:paragraph -->';
+    }
+    
+    $content_html .= '<!-- wp:spacer {"height":"30px"} --><div style="height:30px" aria-hidden="true" class="wp-block-spacer"></div><!-- /wp:spacer -->';
+    $content_html .= '<!-- wp:block {"ref":44510} /-->';
+    $content_html .= '<!-- wp:spacer {"height":"30px"} --><div style="height:30px" aria-hidden="true" class="wp-block-spacer"></div><!-- /wp:spacer -->';
+    /* 
     $content_html .= '<!-- wp:group --><div class="wp-block-group"><div class="wp-block-group__inner-container">';
     $content_html .= '<!-- wp:shortcode -->[Sassy_Social_Share]<!-- /wp:shortcode -->';
     $content_html .= '<!-- wp:spacer {"height":"40px"} --><div style="height:40px" aria-hidden="true" class="wp-block-spacer"></div><!-- /wp:spacer -->';
@@ -89,11 +107,14 @@ function firebase_connector_generate_post_content( $issue, $issue_id ) {
     $content_html .= '<!-- wp:spacer {"height":"40px"} --><div style="height:40px" aria-hidden="true" class="wp-block-spacer"></div><!-- /wp:spacer -->';
     $content_html .= '<!-- wp:block {"ref":' . absint($reusable_block_2_id) . '} /-->';
     $content_html .= '</div></div><!-- /wp:group -->';
-    
+    */
+    // END KATJA GOOG NEWS
+
     $content_html .= '</div>'; // Close the main wrapper
 
     return $content_html;
 }
+
 
 /**
  * ======================================================================
