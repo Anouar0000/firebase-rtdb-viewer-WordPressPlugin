@@ -10,6 +10,14 @@ function firebase_scanner_ajax_handler() {
     $issues = firebase_issues_fetcher_get_issues($admin_limit, $lang);
     if (is_wp_error($issues)) { wp_send_json_error('Failed to fetch issues.'); }
 
+    $firebase_issue_ids = [];
+    foreach ($issues as $issue) {
+        if (is_array($issue) && !empty($issue['id'])) {
+            $firebase_issue_ids[] = $issue['id'];
+        }
+    }
+    $posts_by_firebase_id = firebase_connector_find_posts_by_firebase_ids($firebase_issue_ids);
+
     $all_wp_posts = get_posts(['post_type' => 'post', 'post_status' => 'any', 'posts_per_page' => -1]);
     $normalized_post_titles = [];
     foreach ($all_wp_posts as $wp_post) {
@@ -22,7 +30,7 @@ function firebase_scanner_ajax_handler() {
         if (!is_array($issue) || empty($issue['id']) || empty($issue['headline'])) continue;
         $status = 'missing';
         $post_id_to_return = null;
-        $post_by_id = firebase_connector_find_post_by_firebase_id($issue['id']);
+        $post_by_id = $posts_by_firebase_id[$issue['id']] ?? null;
         if ($post_by_id) {
             $post_status = get_post_status($post_by_id);
             if ($post_status === 'draft') {
@@ -67,13 +75,13 @@ function firebase_processor_ajax_handler() {
     $issue_id = sanitize_text_field($_POST['issue_id'] ?? '');
     if (empty($issue_id)) { wp_send_json_error('No Issue ID provided.'); }
     $options = get_option('firebase_connector_settings');
-    $post_category = (($options['lang'] ?? 'en') === 'en') ? [4] : [3];
+    $post_category = firebase_connector_get_post_category_for_language($options['lang'] ?? 'en');
     $issue_details = firebase_issues_fetcher_get_single_issue_details($issue_id);
     if (is_wp_error($issue_details)) { wp_send_json_error('Could not fetch issue details.'); }
     $post_data = [
         'post_title'   => wp_strip_all_tags($issue_details['headline']),
         'post_content' => firebase_connector_generate_post_content($issue_details, $issue_id),
-        'post_status'  => 'draft', 'post_type' => 'post', 'post_author'  => 29, 'post_category' => $post_category
+        'post_status'  => 'draft', 'post_type' => 'post', 'post_author'  => FIREBASE_CONNECTOR_POST_AUTHOR_ID, 'post_category' => $post_category
     ];
     $new_post_id = wp_insert_post($post_data, true);
     if (is_wp_error($new_post_id)) { wp_send_json_error('Failed to create post: ' . $new_post_id->get_error_message()); }
@@ -159,11 +167,11 @@ function firebase_quick_sync_process_single_handler() {
         }
     } else {
         $options = get_option('firebase_connector_settings');
-        $post_category = (($options['lang'] ?? 'en') === 'en') ? [4] : [3];
+        $post_category = firebase_connector_get_post_category_for_language($options['lang'] ?? 'en');
         $issue_details = firebase_issues_fetcher_get_single_issue_details($issue_id);
         if (is_wp_error($issue_details)) { wp_send_json_error('Could not fetch details for creation.'); }
         $post_data = ['post_title' => wp_strip_all_tags($issue_details['headline']), 'post_content' => firebase_connector_generate_post_content($issue_details, $issue_id), 
-        'post_status' => 'publish', 'post_type' => 'post', 'post_author' => 29, 'post_category' => $post_category];
+        'post_status' => 'publish', 'post_type' => 'post', 'post_author' => FIREBASE_CONNECTOR_POST_AUTHOR_ID, 'post_category' => $post_category];
         $new_post_id = wp_insert_post($post_data);
         if ($new_post_id && !is_wp_error($new_post_id)) {
             update_post_meta($new_post_id, FIREBASE_ISSUE_ID_META_KEY, $issue_id);

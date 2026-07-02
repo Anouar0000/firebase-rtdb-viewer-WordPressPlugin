@@ -9,11 +9,49 @@ if ( ! defined( 'FIREBASE_IMAGE_URL_META_KEY' ) ) {
 
 // --- Helper Functions ---
 
+function firebase_connector_get_post_category_for_language( $lang ) {
+    return ( $lang === 'en' ) ? [ FIREBASE_CONNECTOR_EN_CATEGORY_ID ] : [ FIREBASE_CONNECTOR_DE_CATEGORY_ID ];
+}
+
+
 function firebase_connector_find_post_by_firebase_id( $firebase_id ) {
     $args = ['post_type' => 'post', 'meta_key' => FIREBASE_ISSUE_ID_META_KEY, 'meta_value' => $firebase_id, 'posts_per_page' => 1, 'fields' => 'ids', 'suppress_filters' => true];
     $query = new WP_Query($args);
     return $query->have_posts() ? $query->posts[0] : null;
 }
+
+function firebase_connector_find_posts_by_firebase_ids( $firebase_ids ) {
+    $firebase_ids = array_values( array_unique( array_filter( array_map( 'strval', (array) $firebase_ids ) ) ) );
+    if ( empty( $firebase_ids ) ) {
+        return [];
+    }
+
+    $query = new WP_Query([
+        'post_type'              => 'post',
+        'post_status'            => 'any',
+        'posts_per_page'         => -1,
+        'fields'                 => 'ids',
+        'no_found_rows'          => true,
+        'suppress_filters'       => true,
+        'update_post_meta_cache' => true,
+        'meta_query'             => [[
+            'key'     => FIREBASE_ISSUE_ID_META_KEY,
+            'value'   => $firebase_ids,
+            'compare' => 'IN',
+        ]],
+    ]);
+
+    $post_map = [];
+    foreach ( $query->posts as $post_id ) {
+        $firebase_id = get_post_meta( $post_id, FIREBASE_ISSUE_ID_META_KEY, true );
+        if ( $firebase_id !== '' && ! isset( $post_map[ $firebase_id ] ) ) {
+            $post_map[ $firebase_id ] = (int) $post_id;
+        }
+    }
+
+    return $post_map;
+}
+
 
 
 function firebase_connector_generate_post_content( $issue, $issue_id ) {

@@ -51,12 +51,14 @@ add_action( 'wp_enqueue_scripts', 'firebase_connector_enqueue_styles' );
  * @param array $issue Firebase issue summary data.
  * @return string Card HTML, or an empty string when the issue should not be shown.
  */
-function firebase_issues_render_issue_card( $issue ) {
+function firebase_issues_render_issue_card( $issue, $post_id = false ) {
     if ( ! is_array( $issue ) || empty( $issue['id'] ) ) {
         return '';
     }
 
-    $post_id = firebase_connector_find_post_by_firebase_id( $issue['id'] );
+    if ( false === $post_id ) {
+        $post_id = firebase_connector_find_post_by_firebase_id( $issue['id'] );
+    }
     if ( ! $post_id || get_post_status( $post_id ) !== 'publish' ) {
         return '';
     }
@@ -108,6 +110,14 @@ function firebase_issues_list_shortcode( $atts ) {
         return '<p>No news issues found for this language.</p>';
     }
 
+    $issue_ids = [];
+    foreach ( $issues as $issue ) {
+        if ( is_array( $issue ) && ! empty( $issue['id'] ) ) {
+            $issue_ids[] = $issue['id'];
+        }
+    }
+    $posts_by_firebase_id = firebase_connector_find_posts_by_firebase_ids( $issue_ids );
+
     ob_start();
     ?>
     <div class="fc-issues-block">
@@ -120,7 +130,9 @@ function firebase_issues_list_shortcode( $atts ) {
             <div class="wpcap-grid-container" id="firebase-issues-grid">
                 <?php
                 foreach ( $issues as $issue ) {
-                    echo firebase_issues_render_issue_card( $issue );
+                    $issue_id = ( is_array( $issue ) && ! empty( $issue['id'] ) ) ? (string) $issue['id'] : '';
+                    $post_id = $issue_id !== '' ? ( $posts_by_firebase_id[ $issue_id ] ?? null ) : null;
+                    echo firebase_issues_render_issue_card( $issue, $post_id );
                 }
                 ?>
             </div>
@@ -162,10 +174,19 @@ function firebase_issues_load_more_ajax_handler() {
     }
 
     $issues_page = array_slice( $issues, $offset, $per_page );
+    $issue_ids = [];
+    foreach ( $issues_page as $issue ) {
+        if ( is_array( $issue ) && ! empty( $issue['id'] ) ) {
+            $issue_ids[] = $issue['id'];
+        }
+    }
+    $posts_by_firebase_id = firebase_connector_find_posts_by_firebase_ids( $issue_ids );
 
     ob_start();
     foreach ( $issues_page as $issue ) {
-        echo firebase_issues_render_issue_card( $issue );
+        $issue_id = ( is_array( $issue ) && ! empty( $issue['id'] ) ) ? (string) $issue['id'] : '';
+        $post_id = $issue_id !== '' ? ( $posts_by_firebase_id[ $issue_id ] ?? null ) : null;
+        echo firebase_issues_render_issue_card( $issue, $post_id );
     }
     $html = ob_get_clean();
 

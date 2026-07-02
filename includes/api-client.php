@@ -17,17 +17,13 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 function firebase_issues_fetcher_get_issues( $limit, $lang ) {
     $options = get_option( 'firebase_connector_settings' );
-    $base_url = isset( $options['base_url'] ) ? trailingslashit( $options['base_url'] ) : '';
     $api_token = $options['api_token'] ?? '';
 
-    // empty( $base_url ) || 
     if (empty( $api_token ) ) {
-        return new WP_Error( 'firebase_config_missing', 'Firebase Cloud Functions Base URL or API Token is not configured.' );
+        return new WP_Error( 'firebase_config_missing', 'Firebase API Token is not configured.' );
     }
 
-    //$function_url = $base_url . 'getIssuesList';
-    // Todo: Replace with your actual Cloud Function URL
-    $function_url = 'https://getissueslist-mdlzfg63qq-uc.a.run.app';
+    $function_url = FIREBASE_CONNECTOR_ISSUES_LIST_URL;
 
     $query_params = array(
         'lang'  => $lang,
@@ -105,16 +101,13 @@ function firebase_issues_fetcher_get_single_issue_url( $issue_id, $lang ) {
  */
 function firebase_issues_fetcher_get_single_issue_details( $issue_id ) {
     $options = get_option( 'firebase_connector_settings' );
-    //$base_url = isset( $options['base_url'] ) ? trailingslashit( $options['base_url'] ) : '';
     $api_token = $options['api_token'] ?? '';
 
     if (empty( $api_token ) ) {
-        return new WP_Error( 'firebase_config_missing', 'Firebase Cloud Functions Base URL or API Token is not configured for single issue fetch.' );
+        return new WP_Error( 'firebase_config_missing', 'Firebase API Token is not configured for single issue fetch.' );
     }
 
-    //$function_url = $base_url . 'getIssueDetails'; // Your Cloud Function for single issue
-    //Todo: Replace with your actual Cloud Function URL
-    $function_url = 'https://getissuedetails-mdlzfg63qq-uc.a.run.app';
+    $function_url = FIREBASE_CONNECTOR_ISSUE_DETAILS_URL;
 
     // Build query parameters
     $query_params = array(

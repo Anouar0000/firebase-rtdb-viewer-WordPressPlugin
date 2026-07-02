@@ -28,6 +28,13 @@ define( 'FIREBASE_ISSUE_ID_META_KEY', '_firebase_issue_id' );
 define( 'FIREBASE_CONNECTOR_MANAGED_KEY', '_firebase_connector_managed' );
 define( 'FIREBASE_IMAGE_URL_META_KEY', '_firebase_image_url' );
 
+// Site-specific defaults.
+define( 'FIREBASE_CONNECTOR_POST_AUTHOR_ID', 29 );
+define( 'FIREBASE_CONNECTOR_EN_CATEGORY_ID', 4 );
+define( 'FIREBASE_CONNECTOR_DE_CATEGORY_ID', 3 );
+define( 'FIREBASE_CONNECTOR_ISSUES_LIST_URL', 'https://getissueslist-mdlzfg63qq-uc.a.run.app' );
+define( 'FIREBASE_CONNECTOR_ISSUE_DETAILS_URL', 'https://getissuedetails-mdlzfg63qq-uc.a.run.app' );
+
 // Include core plugin files
 require_once FIREBASE_CONNECTOR_PLUGIN_DIR . 'includes/admin-settings.php';
 require_once FIREBASE_CONNECTOR_PLUGIN_DIR . 'includes/api-client.php';
