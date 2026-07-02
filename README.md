@@ -22,7 +22,6 @@ The centerpiece is the **Interactive Sync Tool**, an AJAX-powered admin page tha
 **Key Features:**
 *   **Powerful Interactive Admin Tool:** Scan for differences between Firebase and WordPress, see the status of each issue (Synced, Missing, Unlinked), and perform actions.
 *   **Bulk Actions:** Create, link, or publish hundreds of posts with a few clicks, using a progress bar for clear feedback.
-*   **Automatic Background Syncing:** A configurable WP-Cron job keeps your site's content fresh. Enable it and choose a schedule (hourly, daily, weekly) that suits your needs.
 *   **Native Post Creation:** Converts Firebase issues into standard WordPress posts for superior SEO and plugin compatibility.
 *   **Featured Image Support:** Intelligently downloads and attaches images, preventing duplicates.
 *   **Infinite Scroll Shortcode:** Use `[firebase_issues_list]` to display a fast-loading grid of your issues that automatically loads more as the user scrolls.
@@ -43,11 +42,10 @@ This tutorial will guide you through syncing your content for the first time. Th
 
 1.  Navigate to **Firebase Connector -> Settings**.
 2.  Enter your secret **API Token**. This is the most important step.
-3.  In the "Automation Settings" section, set the **Admin Tools Fetch Limit** to a high number (e.g., `300`) to ensure it can see all your historical issues.
-4.  Set the **Ongoing Sync Fetch Limit** to a smaller number (e.g., `50`) for efficient daily checks.
-5.  Leave **Enable Automatic Sync** unchecked for now.
-6.  Configure your desired "Frontend" settings.
-7.  Click **Save Settings**.
+3.  In the "Sync Tool Settings" section, set the **Admin Tools Fetch Limit** to a high number (e.g., `300`) to ensure it can see all your historical issues.
+4.  Set the **Quick Sync Fetch Limit** to a smaller number (e.g., `50`) for efficient manual refreshes.
+5.  Configure your desired "Frontend" settings.
+6.  Click **Save Settings**.
 
 **Step 2: Scan for Differences**
 
@@ -79,9 +77,6 @@ This tutorial will guide you through syncing your content for the first time. Th
 3.  Go back to **Firebase Connector -> Tools**. Filter for **"Drafts Only"**.
 4.  Select the drafts you are happy with and click the **"Publish Selected Drafts"** button. They are now live.
 
-**Step 6: Enable Automation**
-
-Once you are confident that everything is working perfectly, go back to **Firebase Connector -> Settings**, check the **Enable Automatic Sync** box, choose your schedule, and save. The plugin will now handle everything for you in the background.
 
 == Shortcode Usage ==
 
@@ -113,14 +108,12 @@ A: The plugin generates standard WordPress content blocks. The final appearance 
 *   **FEATURE:** Added a "Quick Sync" button with a progress bar for manual headless syncs.
 *   **FEATURE:** Implemented "Infinite Scroll" for the `[firebase_issues_list]` shortcode.
 *   **IMPROVEMENT:** Refactored entire admin UI into "Tools" and "Settings" submenus.
-*   **IMPROVEMENT:** Refactored PHP files into a cleaner, more organized structure (`ajax-handlers.php`, `cron-handler.php`, `post-helpers.php`).
+*   **IMPROVEMENT:** Refactored PHP files into a cleaner, more organized structure (`ajax-handlers.php`, `post-helpers.php`, frontend and admin modules).
 *   **IMPROVEMENT:** Implemented a robust "brute-force" title matching system to find unlinked posts reliably.
 *   **IMPROVEMENT:** Added intelligent image handling to prevent duplicate downloads.
-*   **IMPROVEMENT:** Added full control over the automatic sync schedule (enable/disable, frequency).
 
 = 2.0.0 =
 *   Major refactor to sync Firebase issues to native WordPress posts.
-*   Added WP-Cron job for basic automation.
 
 = 1.0.0 =
 *   Initial release. Fetched data live on page load using shortcodes.

@@ -29,12 +29,10 @@ function firebase_connector_settings_init() {
     add_settings_field('limit', 'The max number of issues', 'firebase_limit_callback', $page_slug, 'firebase_content_section');
     add_settings_field('lang', 'Default Language', 'firebase_lang_callback', $page_slug, 'firebase_content_section');
 
-    // SECTION 3: Automation
-    add_settings_section('firebase_automation_section', 'Automation Settings', null, $page_slug);
-    add_settings_field('enable_auto_sync', 'Enable Automatic Sync', 'firebase_enable_auto_sync_callback', $page_slug, 'firebase_automation_section');
-    add_settings_field('sync_schedule', 'Sync Schedule', 'firebase_sync_schedule_callback', $page_slug, 'firebase_automation_section');
-    add_settings_field('ongoing_sync_limit', 'Ongoing Sync Fetch Limit', 'firebase_ongoing_sync_limit_callback', $page_slug, 'firebase_automation_section');
-    add_settings_field('admin_limit', 'Admin Tools Fetch Limit', 'firebase_admin_limit_callback', $page_slug, 'firebase_automation_section');
+    // SECTION 3: Sync tools
+    add_settings_section('firebase_sync_tools_section', 'Sync Tool Settings', null, $page_slug);
+    add_settings_field('ongoing_sync_limit', 'Quick Sync Fetch Limit', 'firebase_ongoing_sync_limit_callback', $page_slug, 'firebase_sync_tools_section');
+    add_settings_field('admin_limit', 'Admin Tools Fetch Limit', 'firebase_admin_limit_callback', $page_slug, 'firebase_sync_tools_section');
 
 }
 add_action( 'admin_init', 'firebase_connector_settings_init' );
@@ -46,25 +44,10 @@ function firebase_api_token_callback() {
     $options = get_option('firebase_connector_settings');
     echo '<input type="password" name="firebase_connector_settings[api_token]" value="' . esc_attr($options['api_token'] ?? '') . '" class="regular-text" placeholder="Your secret API token">';
 }
-function firebase_enable_auto_sync_callback() {
-    $options = get_option('firebase_connector_settings');
-    $checked = isset($options['enable_auto_sync']) ? checked(1, $options['enable_auto_sync'], false) : '';
-    echo '<input type="checkbox" name="firebase_connector_settings[enable_auto_sync]" value="1" ' . $checked . '>';
-    echo '<p class="description">Master switch to enable or disable the automatic background sync.</p>';
-}
-function firebase_sync_schedule_callback() {
-    $options = get_option('firebase_connector_settings');
-    $current_value = $options['sync_schedule'] ?? 'hourly';
-    $schedules = ['hourly' => 'Once Hourly', 'twicedaily' => 'Twice Daily', 'daily' => 'Once Daily', 'weekly' => 'Once Weekly'];
-    echo '<select name="firebase_connector_settings[sync_schedule]">';
-    foreach ( $schedules as $value => $label ) echo '<option value="' . esc_attr($value) . '" ' . selected($current_value, $value, false) . '>' . esc_html($label) . '</option>';
-    echo '</select>';
-    echo '<p class="description">How often the automatic sync should run.</p>';
-}
 function firebase_ongoing_sync_limit_callback() {
     $options = get_option('firebase_connector_settings');
     echo '<input type="number" name="firebase_connector_settings[ongoing_sync_limit]" value="' . absint($options['ongoing_sync_limit'] ?? 50) . '" min="1">';
-    echo '<p class="description">The number of recent issues to check during an automatic or quick sync.</p>';
+    echo '<p class="description">The number of recent issues to check when using Refresh Recent Issues.</p>';
 }
 function firebase_admin_limit_callback() {
     $options = get_option('firebase_connector_settings');
@@ -90,22 +73,12 @@ function firebase_lang_callback() {
  */
 function firebase_connector_sanitize_settings( $input ) {
     $sanitized = [];
-    $old_options = get_option('firebase_connector_settings');
     $sanitized['api_token'] = sanitize_text_field($input['api_token'] ?? '');
     $sanitized['limit'] = absint($input['limit'] ?? 10);
     $sanitized['lang'] = sanitize_key($input['lang'] ?? 'en');
-    $sanitized['enable_auto_sync'] = isset($input['enable_auto_sync']) ? 1 : 0;
-    $sanitized['sync_schedule'] = sanitize_key($input['sync_schedule'] ?? 'hourly');
     $sanitized['ongoing_sync_limit'] = absint($input['ongoing_sync_limit'] ?? 50);
     $sanitized['admin_limit'] = absint($input['admin_limit'] ?? 200);
 
-    // Cron job logic
-    if (($old_options['enable_auto_sync'] ?? 0) !== $sanitized['enable_auto_sync'] || ($old_options['sync_schedule'] ?? 'hourly') !== $sanitized['sync_schedule']) {
-        wp_clear_scheduled_hook(FIREBASE_CRON_HOOK);
-        if ($sanitized['enable_auto_sync']) {
-            wp_schedule_event(time(), $sanitized['sync_schedule'], FIREBASE_CRON_HOOK);
-        }
-    }
     return $sanitized;
 }
 
