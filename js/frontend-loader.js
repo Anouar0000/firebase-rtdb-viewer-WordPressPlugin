@@ -22,31 +22,33 @@ jQuery(document).ready(function($) {
         $spinner.show();
 
         // Get data from the trigger div's attributes
-        let currentPage = parseInt($trigger.attr('data-page'));
+        let currentPage = parseInt($trigger.attr('data-page'), 10) || 1;
         const lang = $trigger.attr('data-lang');
-        const perPage = $trigger.attr('data-per-page');
+        const perPage = parseInt($trigger.attr('data-per-page'), 10) || 10;
+        const initialLimit = parseInt($trigger.attr('data-initial-limit'), 10) || 50;
 
         $.post(firebase_loader_data.ajax_url, {
             action: 'load_more_firebase_issues',
             nonce: firebase_loader_data.nonce,
             page: currentPage,
             lang: lang,
-            per_page: perPage
+            per_page: perPage,
+            initial_limit: initialLimit
         }).done(function(response) {
-            if (response.success && response.data.html.trim() !== '') {
-                const $newItems = $(response.data.html);
-                $grid.append($newItems);
-                
-                // Increment the page number for the next time we scroll
-                $trigger.attr('data-page', currentPage + 1);
+            if (!response.success) {
+                stopLoading();
+                return;
+            }
 
-                // If the number of items returned is less than what we asked for,
-                // it means we've reached the end.
-                if ($newItems.length < perPage) {
-                    stopLoading();
-                }
-            } else {
-                // No more posts to load, disable the trigger
+            const html = response.data.html || '';
+            if (html.trim() !== '') {
+                $grid.append($(html));
+            }
+
+            // Increment the page number for the next time we scroll.
+            $trigger.attr('data-page', currentPage + 1);
+
+            if (!response.data.has_more) {
                 stopLoading();
             }
         }).fail(function() {

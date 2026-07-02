@@ -22,7 +22,7 @@ function firebase_connector_enqueue_styles() {
             'firebase-connector-loader',
             plugin_dir_url( __FILE__ ) . '../js/frontend-loader.js',
             ['jquery'],
-            '1.1.0',
+            '1.1.1',
             true // Load in footer
         );
         
@@ -45,6 +45,43 @@ function firebase_connector_enqueue_styles() {
 }
 add_action( 'wp_enqueue_scripts', 'firebase_connector_enqueue_styles' );
 
+/**
+ * Renders one issue card if it is linked to a published WordPress post.
+ *
+ * @param array $issue Firebase issue summary data.
+ * @return string Card HTML, or an empty string when the issue should not be shown.
+ */
+function firebase_issues_render_issue_card( $issue ) {
+    if ( ! is_array( $issue ) || empty( $issue['id'] ) ) {
+        return '';
+    }
+
+    $post_id = firebase_connector_find_post_by_firebase_id( $issue['id'] );
+    if ( ! $post_id || get_post_status( $post_id ) !== 'publish' ) {
+        return '';
+    }
+
+    $post_link = get_permalink( $post_id );
+    $headline = esc_html( $issue['headline'] ?? '' );
+    $image_url = esc_url( $issue['image'] ?? '' );
+
+    ob_start();
+    ?>
+    <article id="post-ext-<?php echo esc_attr( $issue['id'] ); ?>" class="wpcap-post wpbf-post">
+        <div class="post-grid-inner">
+            <div class="post-grid-thumbnail">
+                <a href="<?php echo esc_url( $post_link ); ?>">
+                    <img loading="lazy" decoding="async" src="<?php echo $image_url; ?>" class="attachment-full size-full wp-post-image" alt="<?php echo $headline; ?>">
+                </a>
+            </div>
+            <div class="post-grid-text-wrap">
+                <h3 class="title"><a href="<?php echo esc_url( $post_link ); ?>"><?php echo $headline; ?></a></h3>
+            </div>
+        </div>
+    </article>
+    <?php
+    return ob_get_clean();
+}
 
 /**
  * SHORTCODE: Display a grid of issues.
@@ -59,8 +96,10 @@ function firebase_issues_list_shortcode( $atts ) {
         'lang'  => $options['lang'] ?? 'en',
         'title' => 'News',
     ], $atts, 'firebase_issues_list');
-    
-    $issues = firebase_issues_fetcher_get_issues( absint( $atts['limit'] ), sanitize_key( $atts['lang'] ) );
+
+    $initial_limit = absint( $atts['limit'] );
+    $lang = sanitize_key( $atts['lang'] );
+    $issues = firebase_issues_fetcher_get_issues( $initial_limit, $lang );
 
     if ( is_wp_error( $issues ) ) {
         return '<p class="fc-error-message">Error: Could not retrieve news issues.</p>';
@@ -79,40 +118,19 @@ function firebase_issues_list_shortcode( $atts ) {
         <div class="wpcap-grid">
             <!-- ADDED ID for JavaScript to target -->
             <div class="wpcap-grid-container" id="firebase-issues-grid">
-                <?php foreach ( $issues as $issue ) :
-                    if ( !isset($issue['id']) ) continue;
-
-                    $post_id = firebase_connector_find_post_by_firebase_id( $issue['id'] );
-                    
-                    // ADDED CHECK: Only show published posts
-                    if ( ! $post_id || get_post_status($post_id) !== 'publish' ) {
-                        continue;
-                    }
-
-                    $post_link = get_permalink( $post_id );
-                    $headline = esc_html( $issue['headline'] );
-                    $image_url = esc_url( $issue['image'] );
-                    ?>
-                    <article id="post-ext-<?php echo esc_attr($issue['id']); ?>" class="wpcap-post wpbf-post">
-                        <div class="post-grid-inner">
-                            <div class="post-grid-thumbnail">
-                                <a href="<?php echo esc_url( $post_link ); ?>">
-                                    <img loading="lazy" decoding="async" src="<?php echo $image_url; ?>" class="attachment-full size-full wp-post-image" alt="<?php echo $headline; ?>">
-                                </a>
-                            </div>
-                            <div class="post-grid-text-wrap">
-                                <h3 class="title"><a href="<?php echo esc_url( $post_link ); ?>"><?php echo $headline; ?></a></h3>
-                            </div>
-                        </div>
-                    </article>
-                <?php endforeach; ?>
+                <?php
+                foreach ( $issues as $issue ) {
+                    echo firebase_issues_render_issue_card( $issue );
+                }
+                ?>
             </div>
         </div>
         
         <!-- ** ADDITION: The invisible trigger for infinite scroll ** -->
         <div class="firebase-load-trigger"
             data-page="1"
-            data-lang="<?php echo esc_attr($atts['lang']); ?>"
+            data-lang="<?php echo esc_attr( $lang ); ?>"
+            data-initial-limit="<?php echo esc_attr( $initial_limit ); ?>"
             data-per-page="10">
             <div class="firebase-spinner" style="display: none; margin: 40px auto; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite;"></div>
         </div>
@@ -123,3 +141,38 @@ function firebase_issues_list_shortcode( $atts ) {
     return ob_get_clean();
 }
 add_shortcode( 'firebase_issues_list', 'firebase_issues_list_shortcode' );
+
+/**
+ * AJAX: Load the next batch of issue cards for infinite scroll.
+ */
+function firebase_issues_load_more_ajax_handler() {
+    check_ajax_referer( 'firebase_load_more_nonce', 'nonce' );
+
+    $page = max( 1, absint( $_POST['page'] ?? 1 ) );
+    $per_page = min( 50, max( 1, absint( $_POST['per_page'] ?? 10 ) ) );
+    $initial_limit = max( 0, absint( $_POST['initial_limit'] ?? 50 ) );
+    $lang = sanitize_key( $_POST['lang'] ?? 'en' );
+
+    $offset = $initial_limit + ( ( $page - 1 ) * $per_page );
+    $fetch_limit = $offset + $per_page;
+    $issues = firebase_issues_fetcher_get_issues( $fetch_limit, $lang );
+
+    if ( is_wp_error( $issues ) ) {
+        wp_send_json_error( 'Could not retrieve more news issues.' );
+    }
+
+    $issues_page = array_slice( $issues, $offset, $per_page );
+
+    ob_start();
+    foreach ( $issues_page as $issue ) {
+        echo firebase_issues_render_issue_card( $issue );
+    }
+    $html = ob_get_clean();
+
+    wp_send_json_success([
+        'html'     => $html,
+        'has_more' => count( $issues ) >= $fetch_limit,
+    ]);
+}
+add_action( 'wp_ajax_load_more_firebase_issues', 'firebase_issues_load_more_ajax_handler' );
+add_action( 'wp_ajax_nopriv_load_more_firebase_issues', 'firebase_issues_load_more_ajax_handler' );
