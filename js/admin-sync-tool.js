@@ -29,10 +29,21 @@ jQuery(document).ready(function($) {
                     if (ajaxAction === 'firebase_unlink_single_post') { item.status = 'match_unlinked'; }
                     if (ajaxAction === 'firebase_publish_single_post') { item.status = 'synced_managed'; }
                     
+                    const imageActions = ['firebase_check_post_images', 'firebase_fix_post_images'];
+                    if (imageActions.includes(ajaxAction)) {
+                        if (response.data && response.data.image_status) {
+                            item.image_status = response.data.image_status;
+                        }
+                        const message = item.image_status && item.image_status.label ? item.image_status.label : 'Image status updated';
+                        $row.find('.actions-cell').html('<span style="color: green; font-weight: bold;">' + message + '</span>');
+                        setTimeout(() => renderSingleRow($row, item), 1500);
+                        return;
+                    }
+
                     if (ajaxAction === 'firebase_update_single_post') {
                         // Special UI feedback for refresh
                         const $actionsCell = $row.find('.actions-cell');
-                        $actionsCell.html('<span style="color: green; font-weight: bold;">✓ Refreshed!</span>');
+                        $actionsCell.html('<span style="color: green; font-weight: bold;">ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Refreshed!</span>');
                         setTimeout(() => renderSingleRow($row, item), 2000); // Restore after 2 seconds
                     } else {
                         renderSingleRow($row, item); // Update UI immediately for other actions
@@ -58,6 +69,22 @@ jQuery(document).ready(function($) {
         $row.find('.actions-cell .button').first().trigger('click');
         $.when($row.data('ajaxPromise')).always(function() {
             setTimeout(function() { processRowsSequentially($rows.slice(1)); }, 100);
+        });
+    }
+
+    function getSelectedPostRows() {
+        return $('#firebase-sync-table-body input.row-checkbox:checked').closest('tr').filter(function() {
+            return !!$(this).find('.row-checkbox').data('post-id');
+        });
+    }
+
+    function processRowsWithAjaxAction($rows, ajaxAction) {
+        if (!$rows.length) return;
+        const $row = $rows.first();
+        const $checkbox = $row.find('.row-checkbox');
+        processRow($row, $checkbox.data('issue-id'), $checkbox.data('post-id'), ajaxAction);
+        $.when($row.data('ajaxPromise')).always(function() {
+            setTimeout(function() { processRowsWithAjaxAction($rows.slice(1), ajaxAction); }, 100);
         });
     }
 
@@ -107,7 +134,7 @@ jQuery(document).ready(function($) {
         $tableBody.empty();
 
         if (data.length === 0) {
-            $tableBody.html('<tr><td colspan="4">No issues match your criteria.</td></tr>');
+            $tableBody.html('<tr><td colspan="6">No issues match your criteria.</td></tr>');
             return;
         }
 
@@ -117,7 +144,8 @@ jQuery(document).ready(function($) {
                 .replace(/{{issueId}}/g, item.id)
                 .replace('{{headline}}', item.headline)
                 .replace('{{status}}', '')
-                .replace('{{date}}', item.date);
+                .replace('{{date}}', item.date)
+                .replace('{{imageStatus}}', (item.image_status && item.image_status.label) ? item.image_status.label : 'Not checked');
             
             const $row = $(rowHtml);
             $tableBody.append($row);
@@ -128,25 +156,27 @@ jQuery(document).ready(function($) {
     }
 
 function renderSingleRow($row, item) {
-    let statusText = '', actionHtml = '', checkboxHtml = '<th scope="row" class="check-column"><input type="checkbox" class="row-checkbox" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '"></th>';
-    
+    const imageStatus = item.image_status || { status: 'not_checked', label: 'Not checked' };
+    let statusText = '', actionHtml = '';
+    let checkboxHtml = '<th scope="row" class="check-column"><input type="checkbox" class="row-checkbox" data-issue-id="' + item.id + '" data-post-id="' + (item.post_id || '') + '"></th>';
     let postLinks = '';
+    let imageMenu = '';
+
     if (item.post_id) {
-        // The edit URL is always relative to the admin area, so it's simple.
         const editUrl = `post.php?post=${item.post_id}&action=edit`;
-        
-        // Start with the base preview URL.
         let previewUrl = `/?p=${item.post_id}&preview=true`;
-        
-        // Check the language passed from PHP.
         if (firebase_sync_data.current_lang === 'de') {
-            // If it's German, prepend the /de/ subdirectory.
             previewUrl = `/de${previewUrl}`;
         }
-        
-        postLinks = '<span class="row-actions"><a href="' + previewUrl + '" target="_blank">Preview</a> | <a href="' + editUrl + '" target="_blank">Edit</a></span>';
+
+        imageMenu = '<details class="image-row-menu"><summary class="button button-small"><span class="vertical-dots">&#8942;</span></summary><div class="image-row-menu-panel">';
+        if (item.status === 'match_unlinked') { imageMenu += '<button type="button" class="button button-small action-link" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Link Post</button>'; }
+        imageMenu += '<button type="button" class="button button-small action-check-images" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Check images</button>';
+        imageMenu += '<button type="button" class="button button-small action-fix-images" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Fix images</button>';
+        imageMenu += '</div></details>';
+        postLinks = imageMenu + '<span class="row-actions"><a href="' + previewUrl + '" target="_blank">Preview</a> | <a href="' + editUrl + '" target="_blank">Edit</a></span>';
     }
-    
+
     switch (item.status) {
         case 'missing':
             statusText = 'Missing';
@@ -159,40 +189,52 @@ function renderSingleRow($row, item) {
         case 'synced_managed':
             statusText = 'Synced (Up-to-date)';
             actionHtml = '<div class="button-group"><button class="button button-small action-refresh" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Refresh</button> <button class="button button-small action-unlink" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Unlink</button></div>' + postLinks;
-            checkboxHtml = '<th scope="row" class="check-column"></th>';
             break;
         case 'synced_manual':
             statusText = 'Synced (Protected)';
-            // Improved structure for consistency
             actionHtml = '<div class="button-group"><span>Protected</span> <button class="button button-small action-unlink" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Unlink</button></div>' + postLinks;
-            checkboxHtml = '<th scope="row" class="check-column"></th>';
             break;
         case 'match_unlinked':
             statusText = 'Match Found (Unlinked)';
-            actionHtml = '<button class="button button-primary button-small action-link" data-issue-id="' + item.id + '" data-post-id="' + item.post_id + '">Link Post</button>' + postLinks;
+            actionHtml = postLinks;
             break;
     }
 
     $row.find('.status-cell .status-label').text(statusText);
+    let extraImageHtml = '';
+    if (imageStatus.articles && imageStatus.articles.length > 0) {
+        imageStatus.articles.forEach(art => {
+            if (art.status === 'manual_review' || art.status === 'broken') {
+                if (art.article_url) {
+                    extraImageHtml += `<div style="margin-top: 4px; font-size: 11px;"><a href="${art.article_url}" target="_blank" title="${art.article_title || 'Article Source'}">Article Source 🔗</a></div>`;
+                }
+                if (art.original_broken_url) {
+                    extraImageHtml += `<div style="margin-top: 2px; font-size: 11px;"><a href="${art.original_broken_url}" target="_blank" style="color: #b32d2e;">Original Broken Link</a></div>`;
+                }
+            }
+        });
+    }
+
+    $row.find('.image-status-cell')
+        .html(`<span class="image-status-label image-status-${imageStatus.status || 'not_checked'}">${imageStatus.label || 'Not checked'}</span>${extraImageHtml}`);
     $row.find('.actions-cell').html(actionHtml + '<span class="spinner row-spinner"></span>');
     $row.find('.check-column').replaceWith(checkboxHtml);
     $row.attr('class', 'status-' + item.status);
 }
-    
     function renderPagination(totalItems, totalPages) {
         const $pagination = $('#pagination-controls');
         $pagination.empty();
         if (totalPages <= 1) return;
         let paginationHtml = `<span class="displaying-num">${totalItems} items</span><span class="pagination-links">`;
         const firstPageClass = currentPage === 1 ? 'disabled' : '';
-        paginationHtml += `<a class="first-page ${firstPageClass}" data-page="1" href="#">«</a>`;
+        paginationHtml += `<a class="first-page ${firstPageClass}" data-page="1" href="#">Ãƒâ€šÃ‚Â«</a>`;
         const prevPageClass = currentPage === 1 ? 'disabled' : '';
-        paginationHtml += `<a class="prev-page ${prevPageClass}" data-page="${currentPage - 1}" href="#">‹</a>`;
+        paginationHtml += `<a class="prev-page ${prevPageClass}" data-page="${currentPage - 1}" href="#">ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¹</a>`;
         paginationHtml += `<span class="paging-input"><input class="current-page" type="text" value="${currentPage}" size="2"> of <span class="total-pages">${totalPages}</span></span>`;
         const nextPageClass = currentPage === totalPages ? 'disabled' : '';
-        paginationHtml += `<a class="next-page ${nextPageClass}" data-page="${currentPage + 1}" href="#">›</a>`;
+        paginationHtml += `<a class="next-page ${nextPageClass}" data-page="${currentPage + 1}" href="#">ÃƒÂ¢Ã¢â€šÂ¬Ã‚Âº</a>`;
         const lastPageClass = currentPage === totalPages ? 'disabled' : '';
-        paginationHtml += `<a class="last-page ${lastPageClass}" data-page="${totalPages}" href="#">»</a>`;
+        paginationHtml += `<a class="last-page ${lastPageClass}" data-page="${totalPages}" href="#">Ãƒâ€šÃ‚Â»</a>`;
         paginationHtml += `</span>`;
         $pagination.html(paginationHtml);
     }
@@ -210,7 +252,7 @@ function renderSingleRow($row, item) {
         const dateTo = $('#scan-date-to').val() || '';
 
         if (dateFrom && dateTo && dateFrom > dateTo) {
-            $('#firebase-sync-table-body').html('<tr><td colspan="5">Start date must be before end date.</td></tr>');
+            $('#firebase-sync-table-body').html('<tr><td colspan="6">Start date must be before end date.</td></tr>');
             $('.wp-list-table').show();
             return;
         }
@@ -219,7 +261,7 @@ function renderSingleRow($row, item) {
         currentPage = 1;
         $button.prop('disabled', true);
         $spinner.addClass('is-active');
-        $('#firebase-sync-table-body').html('<tr><td colspan="5">Scanning 0/' + adminLimit + '...</td></tr>');
+        $('#firebase-sync-table-body').html('<tr><td colspan="6">Scanning 0/' + adminLimit + '...</td></tr>');
         $('.wp-list-table, #pagination-controls').show();
         $('#sync-tool-filters, #sync-tool-actions, .tablenav.bottom').hide();
 
@@ -239,7 +281,7 @@ function renderSingleRow($row, item) {
                 date_to: dateTo
             }).done(response => {
                 if (!response.success) {
-                    $('#firebase-sync-table-body').html('<tr><td colspan="5">Error: ' + response.data + '</td></tr>');
+                    $('#firebase-sync-table-body').html('<tr><td colspan="6">Error: ' + response.data + '</td></tr>');
                     finishScan();
                     return;
                 }
@@ -258,7 +300,7 @@ function renderSingleRow($row, item) {
                     finishScan();
                 }
             }).fail(() => {
-                $('#firebase-sync-table-body').html('<tr><td colspan="5">Server error.</td></tr>');
+                $('#firebase-sync-table-body').html('<tr><td colspan="6">Server error.</td></tr>');
                 finishScan();
             });
         }
@@ -278,7 +320,7 @@ function renderSingleRow($row, item) {
     $('#sort-filter').on('change', function() {renderDisplay(); });
     $('#pagination-controls').on('click', 'a', function(e) { e.preventDefault(); const newPage = $(this).data('page'); if (newPage) { currentPage = parseInt(newPage); renderDisplay(); } });
 
-    $('#firebase-sync-table-body').on('click', '.action-create, .action-link, .action-unlink, .action-publish, .action-refresh', function() {
+    $('#firebase-sync-table-body').on('click', '.action-create, .action-link, .action-unlink, .action-publish, .action-refresh, .action-check-images, .action-fix-images', function() {
         const $button = $(this);
         const $row = $button.closest('tr');
         const issueId = $button.data('issue-id');
@@ -289,6 +331,8 @@ function renderSingleRow($row, item) {
         if ($button.hasClass('action-unlink')) ajaxAction = 'firebase_unlink_single_post';
         if ($button.hasClass('action-publish')) ajaxAction = 'firebase_publish_single_post';
         if ($button.hasClass('action-refresh')) ajaxAction = 'firebase_update_single_post';
+        if ($button.hasClass('action-check-images')) ajaxAction = 'firebase_check_post_images';
+        if ($button.hasClass('action-fix-images')) ajaxAction = 'firebase_fix_post_images';
         processRow($row, issueId, postId, ajaxAction);
     });
     
@@ -308,6 +352,42 @@ function renderSingleRow($row, item) {
         const $rowsToProcess = $('#firebase-sync-table-body input.row-checkbox:checked').closest('tr.status-draft_managed');
         if (!$rowsToProcess.length) { alert('No "Draft" items are selected.'); return; }
         processRowsSequentially($rowsToProcess);
+    });
+
+    $('#check-selected-images').on('click', () => {
+        const $rowsToProcess = getSelectedPostRows();
+        if (!$rowsToProcess.length) { alert('Select at least one row with a WordPress post.'); return; }
+        processRowsWithAjaxAction($rowsToProcess, 'firebase_check_post_images');
+    });
+
+    $('#fix-selected-posts').on('click', () => {
+        const $rowsToProcess = getSelectedPostRows();
+        if (!$rowsToProcess.length) { alert('Select at least one row with a WordPress post.'); return; }
+        processRowsWithAjaxAction($rowsToProcess, 'firebase_fix_post_images');
+    });
+
+
+    $(document).on('click', function(e) {
+        if (!$(e.target).closest('.image-row-menu').length) {
+            $('.image-row-menu[open]').removeAttr('open');
+        }
+    });
+
+    $('#firebase-sync-table-body').on('click', '.image-row-menu summary', function() {
+        const $menu = $(this).closest('.image-row-menu');
+        $('.image-row-menu[open]').not($menu).removeAttr('open');
+        setTimeout(function() {
+            const $panel = $menu.find('.image-row-menu-panel');
+            $panel.css({ left: '', right: '' });
+            const panel = $panel.get(0);
+            if (!panel) return;
+            const rect = panel.getBoundingClientRect();
+            if (rect.left < 8) {
+                $panel.css({ left: 0, right: 'auto' });
+            } else if (rect.right > window.innerWidth - 8) {
+                $panel.css({ right: 0, left: 'auto' });
+            }
+        }, 0);
     });
 
     $('.wp-list-table').on('click', '#cb-select-all-1', function() {

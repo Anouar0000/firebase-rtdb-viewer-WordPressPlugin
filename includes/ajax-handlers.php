@@ -75,7 +75,8 @@ function firebase_scanner_ajax_handler() {
             'headline' => $issue['headline'],
             'status' => $status,
             'post_id' => $post_id_to_return,
-            'date' => $date_formatted
+            'date' => $date_formatted,
+            'image_status' => firebase_connector_get_image_health_summary($post_id_to_return)
         ];
     }
     wp_send_json_success([
@@ -152,6 +153,77 @@ function firebase_updater_ajax_handler() {
 }
 add_action('wp_ajax_firebase_update_single_post', 'firebase_updater_ajax_handler');
 
+
+function firebase_image_health_ajax_context() {
+    $post_id = absint($_POST['post_id'] ?? 0);
+    $issue_id = sanitize_text_field($_POST['issue_id'] ?? '');
+
+    if (empty($post_id)) {
+        wp_send_json_error('No Post ID provided.');
+    }
+    if (!current_user_can('edit_post', $post_id)) {
+        wp_send_json_error('You do not have permission to edit this post.');
+    }
+    if (empty($issue_id)) {
+        $issue_id = get_post_meta($post_id, FIREBASE_ISSUE_ID_META_KEY, true);
+    }
+    if (empty($issue_id)) {
+        wp_send_json_error('No Firebase issue ID found for this post.');
+    }
+
+    return [$post_id, $issue_id];
+}
+
+function firebase_check_post_images_ajax_handler() {
+    check_ajax_referer('firebase_sync_nonce', 'nonce');
+    list($post_id, $issue_id) = firebase_image_health_ajax_context();
+
+    $health = firebase_connector_build_image_health($post_id, $issue_id);
+    if (is_wp_error($health)) {
+        wp_send_json_error($health->get_error_message());
+    }
+
+    wp_send_json_success([
+        'message' => 'Image check complete.',
+        'image_status' => $health,
+    ]);
+}
+add_action('wp_ajax_firebase_check_post_images', 'firebase_check_post_images_ajax_handler');
+
+function firebase_fix_post_images_ajax_handler() {
+    check_ajax_referer('firebase_sync_nonce', 'nonce');
+    list($post_id, $issue_id) = firebase_image_health_ajax_context();
+
+    $health = firebase_connector_fix_post_article_images($post_id, $issue_id);
+    if (is_wp_error($health)) {
+        wp_send_json_error($health->get_error_message());
+    }
+
+    wp_send_json_success([
+        'message' => 'Image fix complete.',
+        'image_status' => $health,
+    ]);
+}
+add_action('wp_ajax_firebase_fix_post_images', 'firebase_fix_post_images_ajax_handler');
+
+function firebase_mark_post_images_reviewed_ajax_handler() {
+    check_ajax_referer('firebase_sync_nonce', 'nonce');
+    $post_id = absint($_POST['post_id'] ?? 0);
+
+    if (empty($post_id)) {
+        wp_send_json_error('No Post ID provided.');
+    }
+    if (!current_user_can('edit_post', $post_id)) {
+        wp_send_json_error('You do not have permission to edit this post.');
+    }
+
+    $health = firebase_connector_mark_post_images_reviewed($post_id);
+    wp_send_json_success([
+        'message' => 'Image status marked reviewed.',
+        'image_status' => $health,
+    ]);
+}
+add_action('wp_ajax_firebase_mark_post_images_reviewed', 'firebase_mark_post_images_reviewed_ajax_handler');
 function firebase_quick_sync_preflight_handler() {
     check_ajax_referer('firebase_quick_sync_nonce', 'nonce');
     $options = get_option('firebase_connector_settings');

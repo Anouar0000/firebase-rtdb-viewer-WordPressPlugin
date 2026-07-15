@@ -40,6 +40,7 @@ require_once FIREBASE_CONNECTOR_PLUGIN_DIR . 'includes/admin-settings.php';
 require_once FIREBASE_CONNECTOR_PLUGIN_DIR . 'includes/api-client.php';
 require_once FIREBASE_CONNECTOR_PLUGIN_DIR . 'includes/frontend-shortcodes.php';
 require_once FIREBASE_CONNECTOR_PLUGIN_DIR . 'includes/post-helpers.php';
+require_once FIREBASE_CONNECTOR_PLUGIN_DIR . 'includes/image-health.php';
 require_once FIREBASE_CONNECTOR_PLUGIN_DIR . 'includes/ajax-handlers.php';
 
 /**

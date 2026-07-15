@@ -117,6 +117,18 @@ function firebase_connector_tools_page_html() {
         #sync-tool-filters { display: flex; align-items: center; gap: 10px; }
         .tablenav-pages .current-page { background: #f0f0f1; border: 1px solid #dcdcde; }
         .firebase-controls .description a { text-decoration: none; }
+        .image-status-label { display: inline-block; padding: 2px 6px; border-radius: 3px; background: #f0f0f1; }
+        .image-status-ok { color: #008a20; }
+        .image-status-fix_available { color: #996800; }
+        .image-status-manual_review, .image-status-broken { color: #b32d2e; }
+        .wp-list-table .column-date, .wp-list-table .date-cell { width: 84px; white-space: nowrap; }
+        .wp-list-table .column-title { width: auto; }
+        .image-row-menu { display: inline-block; margin-right: 6px; position: relative; vertical-align: middle; }
+        .image-row-menu summary { list-style: none; cursor: pointer; min-width: 28px; text-align: center; }
+        .image-row-menu summary::-webkit-details-marker { display: none; }
+        .vertical-dots { display: inline-block; font-size: 18px; line-height: 1; }
+        .image-row-menu-panel { background: #fff; border: 1px solid #c3c4c7; box-shadow: 0 2px 6px rgba(0,0,0,.12); display: flex; flex-direction: column; gap: 4px; padding: 6px; position: absolute; right: 0; z-index: 10; min-width: 125px; max-width: calc(100vw - 32px); }
+        .image-row-menu-panel .button { text-align: left; }
     </style>
     <div class="wrap">
         <h1>Firebase Sync Tools</h1>
@@ -173,6 +185,8 @@ function firebase_connector_tools_page_html() {
             <button id="create-selected" type="button" class="button">Create Selected Missing</button>
             <button id="link-selected" type="button" class="button">Link Selected Matches</button>
             <button id="publish-selected" type="button" class="button button-primary">Publish Selected Drafts</button>
+            <button id="check-selected-images" type="button" class="button">Check Selected Images</button>
+            <button id="fix-selected-posts" type="button" class="button">Fix Selected Posts</button>
         </div>
         
 <table class="wp-list-table widefat fixed striped" style="margin-top: 20px; display: none;">
@@ -184,10 +198,11 @@ function firebase_connector_tools_page_html() {
             <th scope="col" id="headline" class="manage-column column-title column-primary">
                 <span>Firebase Headline</span>
             </th>
-            <th scope="col" class="manage-column">Date</th>
+            <th scope="col" class="manage-column column-date">Date</th>
             <th scope="col" id="status" class="manage-column column-tags">
                 Status
             </th>
+            <th scope="col" class="manage-column column-tags">Image Status</th>
             <th scope="col" id="actions" class="manage-column column-comments">
                 Actions
             </th>
@@ -204,10 +219,11 @@ function firebase_connector_tools_page_html() {
             <th scope="col" class="manage-column column-title column-primary">
                 <span>Firebase Headline</span>
             </th>
-            <th scope="col" class="manage-column">Date</th>
+            <th scope="col" class="manage-column column-date">Date</th>
             <th scope="col" class="manage-column column-tags">
                 Status
             </th>
+            <th scope="col" class="manage-column column-tags">Image Status</th>
             <th scope="col" class="manage-column column-comments">
                 Actions
             </th>
@@ -229,6 +245,9 @@ function firebase_connector_tools_page_html() {
         <td class="date-cell column-date" data-colname="Date">{{date}}</td>
         <td class="status-cell column-tags" data-colname="Status">
             <span class="status-label">{{status}}</span>
+        </td>
+        <td class="image-status-cell column-tags" data-colname="Image Status">
+            <span class="image-status-label">{{imageStatus}}</span>
         </td>
         <td class="actions-cell column-comments" data-colname="Actions">
             <button class="button button-small action-create" data-issue-id="{{issueId}}">Create Post</button>
