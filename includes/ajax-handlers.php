@@ -100,6 +100,7 @@ function firebase_processor_ajax_handler() {
         'post_content' => firebase_connector_generate_post_content($issue_details, $issue_id),
         'post_status'  => 'draft', 'post_type' => 'post', 'post_author'  => FIREBASE_CONNECTOR_POST_AUTHOR_ID, 'post_category' => $post_category
     ];
+    $post_data = array_merge($post_data, firebase_connector_get_issue_post_dates($issue_details, $issue_id));
     $new_post_id = wp_insert_post($post_data, true);
     if (is_wp_error($new_post_id)) { wp_send_json_error('Failed to create post: ' . $new_post_id->get_error_message()); }
     update_post_meta($new_post_id, FIREBASE_ISSUE_ID_META_KEY, $issue_id);
@@ -229,7 +230,7 @@ function firebase_quick_sync_preflight_handler() {
     $options = get_option('firebase_connector_settings');
     $sync_limit = $options['ongoing_sync_limit'] ?? 50;
     $lang = $options['lang'] ?? 'en';
-    $issues = firebase_issues_fetcher_get_issues($sync_limit, $lang); 
+    $issues = firebase_issues_fetcher_get_issues($sync_limit, $lang);
     if (is_wp_error($issues) || empty($issues)) { wp_send_json_error('No recent issues found to sync.'); }
     $issues_in_reverse_order = array_reverse($issues);
     $issue_ids = wp_list_pluck($issues_in_reverse_order, 'id');
@@ -258,8 +259,9 @@ function firebase_quick_sync_process_single_handler() {
         $post_category = firebase_connector_get_post_category_for_language($options['lang'] ?? 'en');
         $issue_details = firebase_issues_fetcher_get_single_issue_details($issue_id);
         if (is_wp_error($issue_details)) { wp_send_json_error('Could not fetch details for creation.'); }
-        $post_data = ['post_title' => wp_strip_all_tags($issue_details['headline']), 'post_content' => firebase_connector_generate_post_content($issue_details, $issue_id), 
+        $post_data = ['post_title' => wp_strip_all_tags($issue_details['headline']), 'post_content' => firebase_connector_generate_post_content($issue_details, $issue_id),
         'post_status' => 'publish', 'post_type' => 'post', 'post_author' => FIREBASE_CONNECTOR_POST_AUTHOR_ID, 'post_category' => $post_category];
+        $post_data = array_merge($post_data, firebase_connector_get_issue_post_dates($issue_details, $issue_id));
         $new_post_id = wp_insert_post($post_data);
         if ($new_post_id && !is_wp_error($new_post_id)) {
             update_post_meta($new_post_id, FIREBASE_ISSUE_ID_META_KEY, $issue_id);
@@ -272,3 +274,26 @@ function firebase_quick_sync_process_single_handler() {
     }
 }
 add_action('wp_ajax_firebase_quick_sync_process_single', 'firebase_quick_sync_process_single_handler');
+
+function firebase_bulk_image_fix_preflight_handler() {
+    check_ajax_referer('firebase_quick_sync_nonce', 'nonce');
+
+    global $wpdb;
+    // Get all WordPress posts that are linked to a Firebase issue
+    $query = "
+        SELECT p.ID as post_id, pm.meta_value as issue_id
+        FROM {$wpdb->posts} p
+        INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+        WHERE pm.meta_key = %s
+        AND p.post_status IN ('publish', 'draft', 'pending', 'private')
+    ";
+
+    $results = $wpdb->get_results($wpdb->prepare($query, FIREBASE_ISSUE_ID_META_KEY), ARRAY_A);
+
+    if (empty($results)) {
+        wp_send_json_error('No linked posts found to process.');
+    }
+
+    wp_send_json_success(['posts' => $results]);
+}
+add_action('wp_ajax_firebase_bulk_image_fix_preflight', 'firebase_bulk_image_fix_preflight_handler');

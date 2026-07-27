@@ -146,6 +146,16 @@ function firebase_connector_tools_page_html() {
             <div id="quick-sync-progress-bar" style="width: 0%; height: 20px; background-color: #46b450; border-radius: 2px; text-align: center; color: white; line-height: 20px;"></div>
         </div>
         <div id="quick-sync-progress-label" style="display: none; margin-top: -15px; margin-bottom: 20px; font-style: italic; color: #555;"></div>
+        <div class="firebase-controls" style="margin-top: 15px;">
+            <button id="bulk-fix-all-images-button" class="button button-secondary">Scan & Auto-Fix All Images</button>
+            <p class="description">
+                (Scans every single linked WordPress post and automatically repairs any broken image URLs.)
+            </p>
+        </div>
+        <div id="bulk-fix-images-progress-container" style="display: none; margin-bottom: 20px; background-color: #eee; border-radius: 4px; padding: 3px; border: 1px solid #ccc;">
+            <div id="bulk-fix-images-progress-bar" style="width: 0%; height: 20px; background-color: #46b450; border-radius: 2px; text-align: center; color: white; line-height: 20px;"></div>
+        </div>
+        <div id="bulk-fix-images-progress-label" style="display: none; margin-top: -15px; margin-bottom: 20px; font-style: italic; color: #555;"></div>
 
         <hr>
         <h2>Interactive Sync Tool</h2>

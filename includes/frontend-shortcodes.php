@@ -65,7 +65,7 @@ function firebase_issues_render_issue_card( $issue, $post_id = false ) {
 
     $post_link = get_permalink( $post_id );
     $headline = esc_html( $issue['headline'] ?? '' );
-    $image_url = esc_url( $issue['image'] ?? '' );
+    $image_url = firebase_connector_prepare_url_for_html_attribute( $issue['image'] ?? '' );
 
     ob_start();
     ?>

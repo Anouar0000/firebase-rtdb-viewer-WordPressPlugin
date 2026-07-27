@@ -9,7 +9,7 @@ jQuery(document).ready(function($) {
     function processRow($row, issueId, postId, ajaxAction) {
         const $buttons = $row.find('.actions-cell .button'); // Target all buttons in the cell
         const $spinner = $row.find('.row-spinner');
-        
+
         $buttons.prop('disabled', true);
         $spinner.addClass('is-active');
 
@@ -28,7 +28,7 @@ jQuery(document).ready(function($) {
                     if (ajaxAction === 'firebase_link_single_post') { item.status = 'synced_manual'; }
                     if (ajaxAction === 'firebase_unlink_single_post') { item.status = 'match_unlinked'; }
                     if (ajaxAction === 'firebase_publish_single_post') { item.status = 'synced_managed'; }
-                    
+
                     const imageActions = ['firebase_check_post_images', 'firebase_fix_post_images'];
                     if (imageActions.includes(ajaxAction)) {
                         if (response.data && response.data.image_status) {
@@ -43,7 +43,7 @@ jQuery(document).ready(function($) {
                     if (ajaxAction === 'firebase_update_single_post') {
                         // Special UI feedback for refresh
                         const $actionsCell = $row.find('.actions-cell');
-                        $actionsCell.html('<span style="color: green; font-weight: bold;">ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Refreshed!</span>');
+                        $actionsCell.html('<span style="color: green; font-weight: bold;">ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ Refreshed!</span>');
                         setTimeout(() => renderSingleRow($row, item), 2000); // Restore after 2 seconds
                     } else {
                         renderSingleRow($row, item); // Update UI immediately for other actions
@@ -61,8 +61,8 @@ jQuery(document).ready(function($) {
         });
         $row.data('ajaxPromise', promise);
     }
-    
-    
+
+
     function processRowsSequentially($rows) {
         if (!$rows.length) return;
         const $row = $rows.first();
@@ -102,7 +102,7 @@ jQuery(document).ready(function($) {
             const searchMatch = item.headline.toLowerCase().includes(searchFilter);
             return statusMatch && searchMatch;
         });
-        
+
         const totalItems = filteredData.length;
         const totalPages = Math.ceil(totalItems / itemsPerPage);
         currentPage = Math.min(currentPage, totalPages) || 1;
@@ -121,13 +121,13 @@ jQuery(document).ready(function($) {
                 return new Date(a.date) - new Date(b.date);
             }
         });
-        
+
         const paginatedData = filteredData.slice(startIndex, endIndex);
 
         renderTableRows(paginatedData);
         renderPagination(totalItems, totalPages);
     }
-    
+
     function renderTableRows(data) {
         const $tableBody = $('#firebase-sync-table-body');
         const template = $('#sync-row-template').html();
@@ -146,10 +146,10 @@ jQuery(document).ready(function($) {
                 .replace('{{status}}', '')
                 .replace('{{date}}', item.date)
                 .replace('{{imageStatus}}', (item.image_status && item.image_status.label) ? item.image_status.label : 'Not checked');
-            
+
             const $row = $(rowHtml);
             $tableBody.append($row);
-            
+
             // The single row renderer does all the detailed work
             renderSingleRow($row, item);
         });
@@ -206,7 +206,7 @@ function renderSingleRow($row, item) {
         imageStatus.articles.forEach(art => {
             if (art.status === 'manual_review' || art.status === 'broken') {
                 if (art.article_url) {
-                    extraImageHtml += `<div style="margin-top: 4px; font-size: 11px;"><a href="${art.article_url}" target="_blank" title="${art.article_title || 'Article Source'}">Article Source 🔗</a></div>`;
+                    extraImageHtml += `<div style="margin-top: 4px; font-size: 11px;"><a href="${art.article_url}" target="_blank" title="${art.article_title || 'Article Source'}">Article Source ðŸ”—</a></div>`;
                 }
                 if (art.original_broken_url) {
                     extraImageHtml += `<div style="margin-top: 2px; font-size: 11px;"><a href="${art.original_broken_url}" target="_blank" style="color: #b32d2e;">Original Broken Link</a></div>`;
@@ -227,14 +227,14 @@ function renderSingleRow($row, item) {
         if (totalPages <= 1) return;
         let paginationHtml = `<span class="displaying-num">${totalItems} items</span><span class="pagination-links">`;
         const firstPageClass = currentPage === 1 ? 'disabled' : '';
-        paginationHtml += `<a class="first-page ${firstPageClass}" data-page="1" href="#">Ãƒâ€šÃ‚Â«</a>`;
+        paginationHtml += `<a class="first-page ${firstPageClass}" data-page="1" href="#">ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â«</a>`;
         const prevPageClass = currentPage === 1 ? 'disabled' : '';
-        paginationHtml += `<a class="prev-page ${prevPageClass}" data-page="${currentPage - 1}" href="#">ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¹</a>`;
+        paginationHtml += `<a class="prev-page ${prevPageClass}" data-page="${currentPage - 1}" href="#">ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¹</a>`;
         paginationHtml += `<span class="paging-input"><input class="current-page" type="text" value="${currentPage}" size="2"> of <span class="total-pages">${totalPages}</span></span>`;
         const nextPageClass = currentPage === totalPages ? 'disabled' : '';
-        paginationHtml += `<a class="next-page ${nextPageClass}" data-page="${currentPage + 1}" href="#">ÃƒÂ¢Ã¢â€šÂ¬Ã‚Âº</a>`;
+        paginationHtml += `<a class="next-page ${nextPageClass}" data-page="${currentPage + 1}" href="#">ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Âº</a>`;
         const lastPageClass = currentPage === totalPages ? 'disabled' : '';
-        paginationHtml += `<a class="last-page ${lastPageClass}" data-page="${totalPages}" href="#">Ãƒâ€šÃ‚Â»</a>`;
+        paginationHtml += `<a class="last-page ${lastPageClass}" data-page="${totalPages}" href="#">ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â»</a>`;
         paginationHtml += `</span>`;
         $pagination.html(paginationHtml);
     }
@@ -335,7 +335,7 @@ function renderSingleRow($row, item) {
         if ($button.hasClass('action-fix-images')) ajaxAction = 'firebase_fix_post_images';
         processRow($row, issueId, postId, ajaxAction);
     });
-    
+
     $('#create-selected').on('click', () => {
         const $rowsToProcess = $('#firebase-sync-table-body input.row-checkbox:checked').closest('tr.status-missing');
         if (!$rowsToProcess.length) { alert('No "Missing" items are selected.'); return; }
@@ -454,13 +454,84 @@ $('#quick-sync-button').on('click', function() {
                 const percentage = (processedCount / totalCount) * 100;
                 $progressBar.css('width', percentage + '%');
                 $progressLabel.text(`Processing ${processedCount}/${totalCount}...`);
-                
+
                 // Process the next item in the queue
                 processNext();
             });
         }
 
         // Start the process
+        processNext();
+    }
+});
+
+// --- BULK SCAN & FIX ALL IMAGES LOGIC ---
+
+$('#bulk-fix-all-images-button').on('click', function() {
+    const $button = $(this);
+    const $progressBarContainer = $('#bulk-fix-images-progress-container');
+    const $progressBar = $('#bulk-fix-images-progress-bar');
+    const $progressLabel = $('#bulk-fix-images-progress-label');
+
+    if (!confirm('This will scan and auto-fix images on ALL linked WordPress posts. This might take a few minutes. Proceed?')) {
+        return;
+    }
+
+    $button.prop('disabled', true);
+    $progressLabel.text('Fetching list of posts to scan...').show();
+    $progressBar.css('width', '0%');
+    $progressBarContainer.show();
+
+    // 1. Pre-flight check
+    $.post(firebase_sync_data.ajax_url, {
+        action: 'firebase_bulk_image_fix_preflight',
+        nonce: firebase_sync_data.quick_sync_nonce
+    }).done(function(response) {
+        if (response.success && response.data.posts && response.data.posts.length > 0) {
+            processBulkImageQueue(response.data.posts);
+        } else {
+            $progressLabel.text(response.data || 'No posts found to process.');
+            $button.prop('disabled', false);
+        }
+    }).fail(function() {
+        $progressLabel.text('Error: Could not connect to the server.');
+        $button.prop('disabled', false);
+    });
+
+    // 2. Function to process the queue of posts one by one
+    function processBulkImageQueue(postsQueue) {
+        let processedCount = 0;
+        const totalCount = postsQueue.length;
+        $progressLabel.text(`Scanning and fixing ${processedCount}/${totalCount}...`);
+
+        function processNext() {
+            if (postsQueue.length === 0) {
+                $progressLabel.text(`Complete! Scanned and fixed images for ${totalCount} posts.`);
+                $progressBar.css('width', '100%');
+                $button.prop('disabled', false);
+                if ($('#scan-firebase-issues').length) {
+                    $('#scan-firebase-issues').trigger('click');
+                }
+                return;
+            }
+
+            const postData = postsQueue.shift();
+
+            $.post(firebase_sync_data.ajax_url, {
+                action: 'firebase_fix_post_images',
+                nonce: firebase_sync_data.sync_nonce,
+                post_id: postData.post_id,
+                issue_id: postData.issue_id
+            }).always(function() {
+                processedCount++;
+                const percentage = (processedCount / totalCount) * 100;
+                $progressBar.css('width', percentage + '%');
+                $progressLabel.text(`Scanning and fixing ${processedCount}/${totalCount}...`);
+
+                processNext();
+            });
+        }
+
         processNext();
     }
 });

@@ -13,6 +13,139 @@ function firebase_connector_get_post_category_for_language( $lang ) {
     return ( $lang === 'en' ) ? [ FIREBASE_CONNECTOR_EN_CATEGORY_ID ] : [ FIREBASE_CONNECTOR_DE_CATEGORY_ID ];
 }
 
+function firebase_connector_get_issue_post_dates( $issue, $issue_id = '' ) {
+    $date_sources = [
+        $issue['dateCreated'] ?? null,
+        $issue['createdAt'] ?? null,
+        $issue['publishedAt'] ?? null,
+        $issue['publicationDate'] ?? null,
+        $issue['date'] ?? null,
+        $issue['issueDate'] ?? null,
+        $issue['title'] ?? null,
+        $issue_id,
+    ];
+
+    foreach ( $date_sources as $date_source ) {
+        $dates = firebase_connector_normalize_issue_post_date( $date_source );
+        if ( ! empty( $dates ) ) {
+            return $dates;
+        }
+    }
+
+    return [];
+}
+
+function firebase_connector_normalize_issue_post_date( $date_source ) {
+    if ( empty( $date_source ) ) {
+        return [];
+    }
+
+    $timestamp = firebase_connector_extract_issue_timestamp( $date_source );
+    if ( $timestamp ) {
+        $post_date_gmt = gmdate( 'Y-m-d H:i:s', $timestamp );
+        return [
+            'post_date'     => get_date_from_gmt( $post_date_gmt ),
+            'post_date_gmt' => $post_date_gmt,
+        ];
+    }
+
+    if ( ! is_string( $date_source ) ) {
+        return [];
+    }
+
+    $date_source = trim( $date_source );
+    $local_date = '';
+
+    if ( preg_match( '/\b(\d{4})-(\d{2})-(\d{2})\b/', $date_source, $matches ) ) {
+        $local_date = sprintf( '%04d-%02d-%02d 00:00:00', $matches[1], $matches[2], $matches[3] );
+    } elseif ( preg_match( '/\b(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})\b/', $date_source, $matches ) ) {
+        $local_date = sprintf( '%04d-%02d-%02d 00:00:00', $matches[3], $matches[2], $matches[1] );
+    }
+
+    if ( $local_date === '' ) {
+        $parsed = date_create( $date_source, wp_timezone() );
+        if ( ! $parsed ) {
+            return [];
+        }
+        $local_date = $parsed->format( 'Y-m-d H:i:s' );
+    }
+
+    return [
+        'post_date'     => $local_date,
+        'post_date_gmt' => get_gmt_from_date( $local_date ),
+    ];
+}
+
+function firebase_connector_extract_issue_timestamp( $value ) {
+    if ( is_object( $value ) ) {
+        $value = get_object_vars( $value );
+    }
+
+    if ( is_array( $value ) ) {
+        foreach ( [ 'seconds', '_seconds' ] as $key ) {
+            if ( isset( $value[ $key ] ) && is_numeric( $value[ $key ] ) ) {
+                return (int) $value[ $key ];
+            }
+        }
+
+        foreach ( [ 'milliseconds', '_milliseconds' ] as $key ) {
+            if ( isset( $value[ $key ] ) && is_numeric( $value[ $key ] ) ) {
+                return (int) floor( (float) $value[ $key ] / 1000 );
+            }
+        }
+
+        return 0;
+    }
+
+    if ( is_numeric( $value ) ) {
+        $timestamp = (float) $value;
+        if ( $timestamp > 20000000000 ) {
+            $timestamp = floor( $timestamp / 1000 );
+        }
+        return $timestamp >= 946684800 ? (int) $timestamp : 0;
+    }
+
+    return 0;
+}
+
+function firebase_connector_prepare_url_for_html_attribute( $url ) {
+    $url = trim( html_entity_decode( (string) $url, ENT_QUOTES, 'UTF-8' ) );
+    if ( $url === '' || strpos( $url, 'data:' ) === 0 ) {
+        return esc_url( $url );
+    }
+
+    $parts = wp_parse_url( $url );
+    if ( ! is_array( $parts ) || empty( $parts['host'] ) ) {
+        return esc_url( $url );
+    }
+
+    $scheme = isset( $parts['scheme'] ) ? strtolower( $parts['scheme'] ) . '://' : '//';
+    $auth = '';
+    if ( isset( $parts['user'] ) ) {
+        $auth = $parts['user'];
+        if ( isset( $parts['pass'] ) ) {
+            $auth .= ':' . $parts['pass'];
+        }
+        $auth .= '@';
+    }
+
+    $host = $parts['host'];
+    $port = isset( $parts['port'] ) ? ':' . $parts['port'] : '';
+    $path = isset( $parts['path'] ) ? firebase_connector_encode_url_path( $parts['path'] ) : '';
+    $query = isset( $parts['query'] ) ? '?' . $parts['query'] : '';
+    $fragment = isset( $parts['fragment'] ) ? '#' . rawurlencode( rawurldecode( $parts['fragment'] ) ) : '';
+
+    return esc_url( $scheme . $auth . $host . $port . $path . $query . $fragment );
+}
+
+function firebase_connector_encode_url_path( $path ) {
+    $segments = explode( '/', $path );
+    foreach ( $segments as $index => $segment ) {
+        $segments[ $index ] = rawurlencode( rawurldecode( $segment ) );
+    }
+
+    return implode( '/', $segments );
+}
 
 function firebase_connector_find_post_by_firebase_id( $firebase_id ) {
     $args = ['post_type' => 'post', 'meta_key' => FIREBASE_ISSUE_ID_META_KEY, 'meta_value' => $firebase_id, 'posts_per_page' => 1, 'fields' => 'ids', 'suppress_filters' => true];
@@ -92,7 +225,7 @@ function firebase_connector_generate_post_content( $issue, $issue_id ) {
         foreach ( $articles as $article ) {
             $article_counter++;
             $article_url = esc_url( $article['url'] ?? '#' );
-            $article_image_url = esc_url( $article['imageUrl'] ?? '' );
+            $article_image_url = firebase_connector_prepare_url_for_html_attribute( $article['imageUrl'] ?? '' );
             $article_title = esc_html( $article['title'] ?? 'No Title' );
             $article_teaser = wp_kses_post( $article['teaser'] ?? '' );
             $article_source = esc_html( $article['source'] ?? 'Unknown Source' );

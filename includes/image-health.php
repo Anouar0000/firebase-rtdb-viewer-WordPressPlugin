@@ -255,7 +255,7 @@ function firebase_connector_replace_article_image_urls( $content, $replacements 
         }
 
         $replacement_url = (string) $replacements[ $article_index ];
-        $new_url = strpos( $replacement_url, 'data:image/svg+xml' ) === 0 ? $replacement_url : esc_url( $replacement_url );
+        $new_url = strpos( $replacement_url, 'data:image/svg+xml' ) === 0 ? $replacement_url : firebase_connector_prepare_url_for_html_attribute( $replacement_url );
         
         $tag = preg_replace( '/\bsrc\s*=\s*(["\'])(.*?)\1/is', 'src="' . esc_attr( $new_url ) . '"', $tag, 1 );
         $tag = preg_replace( '/\s+srcset\s*=\s*(["\'])(.*?)\1/is', '', $tag );
