@@ -140,8 +140,25 @@ function firebase_connector_prepare_url_for_html_attribute( $url ) {
 
 function firebase_connector_encode_url_path( $path ) {
     $segments = explode( '/', $path );
+    $path_segment_characters = [
+        '%21' => '!',
+        '%24' => '$',
+        '%26' => '&',
+        '%27' => "'",
+        '%28' => '(',
+        '%29' => ')',
+        '%2A' => '*',
+        '%2B' => '+',
+        '%2C' => ',',
+        '%3A' => ':',
+        '%3B' => ';',
+        '%3D' => '=',
+        '%40' => '@',
+    ];
+
     foreach ( $segments as $index => $segment ) {
-        $segments[ $index ] = rawurlencode( rawurldecode( $segment ) );
+        $encoded_segment = rawurlencode( rawurldecode( $segment ) );
+        $segments[ $index ] = strtr( $encoded_segment, $path_segment_characters );
     }
 
     return implode( '/', $segments );
