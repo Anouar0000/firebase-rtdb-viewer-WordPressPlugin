@@ -147,6 +147,35 @@ function firebase_connector_encode_url_path( $path ) {
     return implode( '/', $segments );
 }
 
+function firebase_connector_get_clean_sideload_filename( $url, $fallback_title = '' ) {
+    $parts = wp_parse_url( (string) $url );
+    $path = is_array( $parts ) && ! empty( $parts['path'] ) ? $parts['path'] : '';
+    $basename = $path !== '' ? wp_basename( rawurldecode( $path ) ) : '';
+
+    if ( $basename === '' ) {
+        $extension = 'jpg';
+        $name = sanitize_title( $fallback_title );
+    } else {
+        $extension = pathinfo( $basename, PATHINFO_EXTENSION );
+        $name = pathinfo( $basename, PATHINFO_FILENAME );
+    }
+
+    $extension = strtolower( sanitize_key( $extension ?: 'jpg' ) );
+
+    // We intentionally do NOT use sanitize_file_name() here anymore.
+    // This allows the raw decoded UTF-8 characters (like Umlaute) to remain intact.
+    $name = preg_replace( '/\.[^.]+$/', '', $name );
+
+    if ( $name === '' ) {
+        $name = sanitize_title( $fallback_title );
+    }
+    if ( $name === '' ) {
+        $name = 'firebase-image';
+    }
+
+    return $name . '.' . $extension;
+}
+
 function firebase_connector_find_post_by_firebase_id( $firebase_id ) {
     $args = ['post_type' => 'post', 'meta_key' => FIREBASE_ISSUE_ID_META_KEY, 'meta_value' => $firebase_id, 'posts_per_page' => 1, 'fields' => 'ids', 'suppress_filters' => true];
     $query = new WP_Query($args);
@@ -326,9 +355,35 @@ function firebase_connector_set_featured_image( $post_id, $image_url, $post_titl
     // 3. If we STILL don't have an attachment_id (because it was a truly external image,
     // or the local search failed), then we proceed with downloading it.
     if ( ! $attachment_id ) {
-        add_filter( 'http_request_timeout', function() { return 30; } );
+        $clean_filename = firebase_connector_get_clean_sideload_filename( $image_url, $post_title );
+        $timeout_filter = function() { return 30; };
+        $sideload_prefilter = function( $file ) use ( $clean_filename ) {
+            if ( ! empty( $clean_filename ) ) {
+                $file['name'] = $clean_filename;
+            }
+
+            return $file;
+        };
+
+        // This filter will override WordPress's default sanitize_file_name during the sideload,
+        // so that if WordPress tries to strip the UTF-8 characters out of our clean_filename,
+        // we forcefully return our exact clean_filename.
+        $sanitize_bypass = function( $filename, $filename_raw ) use ( $clean_filename ) {
+            if ( ! empty( $clean_filename ) && $filename_raw === $clean_filename ) {
+                return $filename_raw;
+            }
+            return $filename;
+        };
+
+        add_filter( 'http_request_timeout', $timeout_filter );
+        add_filter( 'wp_handle_sideload_prefilter', $sideload_prefilter );
+        add_filter( 'sanitize_file_name', $sanitize_bypass, 99, 2 );
+
         $sideload_result = media_sideload_image( $image_url, $post_id, $post_title, 'id' );
-        remove_filter( 'http_request_timeout', function() { return 30; } );
+
+        remove_filter( 'sanitize_file_name', $sanitize_bypass, 99 );
+        remove_filter( 'wp_handle_sideload_prefilter', $sideload_prefilter );
+        remove_filter( 'http_request_timeout', $timeout_filter );
 
         if ( ! is_wp_error( $sideload_result ) ) {
             $attachment_id = $sideload_result;
