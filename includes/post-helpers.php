@@ -242,8 +242,6 @@ function firebase_connector_generate_post_content( $issue, $issue_id ) {
         'source' => ($current_lang === 'de') ? 'Quelle' : 'Source',
     ];
     $mailerlite_form_id = ($current_lang === 'de') ? '3034691:n9b6n1' : '3345723:b6d6q7';
-    $reusable_block_1_id = ($current_lang === 'de') ? '3174' : '2224';
-    $reusable_block_2_id = ($current_lang === 'de') ? '1423' : '515';
 
     // Get standard issue data (unchanged)
     $main_image_credit = isset( $issue['imageCredit'] ) ? esc_html( $issue['imageCredit'] ) : '';
@@ -255,7 +253,7 @@ function firebase_connector_generate_post_content( $issue, $issue_id ) {
     $content_html .= '<div class="firebase-post-content-wrapper">';
 
     if ( ! empty( $main_image_credit ) ) {
-        $content_html .= '<p class="featured-img-caption">' . esc_html($translation_strings['photo']) . ': ' . $main_image_credit . '</p>';
+        $content_html .= '<aside><p class="featured-img-caption">' . esc_html($translation_strings['photo']) . ': ' . $main_image_credit . '</p></aside>';
     }
     if ( ! empty( $teaser ) ) {
         $content_html .= '<p class="vorspann">' . $teaser . '</p>';
@@ -278,7 +276,7 @@ function firebase_connector_generate_post_content( $issue, $issue_id ) {
             $article_credit = esc_html( $article['credit'] ?? '' );
 
             // Append the HTML for one article to our main string
-            $content_html .= '<div class="wp-block-group" style="margin-bottom:30px;"><div class="wp-block-group__inner-container">';
+            $content_html .= '<div class="wp-block-group teaser-box"><div class="wp-block-group__inner-container">';
             $content_html .= '<div class="wp-block-columns is-layout-flex">';
             
             // Image Column
@@ -294,7 +292,7 @@ function firebase_connector_generate_post_content( $issue, $issue_id ) {
             $content_html .= '<div class="wp-block-column">';
             // ** THE FIX IS HERE: `<a>` is now INSIDE `<h2>` **
             $content_html .= '<h2 class="wp-block-heading"><a href="' . $article_url . '" target="_blank" rel="noreferrer noopener">' . $article_title . '</a></h2>';
-            $content_html .= '<p class="news-teaser">' . $article_teaser . '</p>';
+            $content_html .= '<p class="news-teaser"><a href="' . $article_url . '" target="_blank" rel="noreferrer noopener" style="text-decoration: none; color: inherit;">' . $article_teaser . '</a></p>';
             $content_html .= '<p><a href="' . $article_url . '" target="_blank" rel="noreferrer noopener">' . esc_html($translation_strings['source']) . ': ' . $article_source . '</a></p>';
             $content_html .= '</div>';
             
@@ -308,15 +306,6 @@ function firebase_connector_generate_post_content( $issue, $issue_id ) {
     } else {
         $content_html .= '<div class="ml-form-embed nl-cta" data-account="1712162:v1f8q9v0s8" data-form="' . esc_attr($mailerlite_form_id) . '"></div>';
     }
-
-    // Append the final static content
-    $content_html .= '<!-- wp:group --><div class="wp-block-group"><div class="wp-block-group__inner-container">';
-    $content_html .= '<!-- wp:shortcode -->[Sassy_Social_Share]<!-- /wp:shortcode -->';
-    $content_html .= '<!-- wp:spacer {"height":"40px"} --><div style="height:40px" aria-hidden="true" class="wp-block-spacer"></div><!-- /wp:spacer -->';
-    $content_html .= '<!-- wp:block {"ref":' . absint($reusable_block_1_id) . '} /-->';
-    $content_html .= '<!-- wp:spacer {"height":"40px"} --><div style="height:40px" aria-hidden="true" class="wp-block-spacer"></div><!-- /wp:spacer -->';
-    $content_html .= '<!-- wp:block {"ref":' . absint($reusable_block_2_id) . '} /-->';
-    $content_html .= '</div></div><!-- /wp:group -->';
 
     $content_html .= '</div>'; // Close the main wrapper
 
